@@ -8,6 +8,16 @@ const fields = [
 ];
 
 export default function Home() {
+  const [fields, setFields] = useState([]);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    // Fitur: Pencarian (q) dan Pagination (limit/page)
+    fetch(`http://localhost:5000/api/fields?q=${search}&limit=6&page=1`)
+      .then(res => res.json())
+      .then(res => setFields(res.data))
+      .catch(err => console.error(err));
+  }, [search]);
   return (
     <div className="space-y-12">
       {/* Header Section */}

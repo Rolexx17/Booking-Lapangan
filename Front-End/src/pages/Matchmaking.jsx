@@ -7,6 +7,16 @@ const matches = [
 ];
 
 export default function Matchmaking() {
+  const [fields, setFields] = useState([]);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    // Fitur: Pencarian (q) dan Pagination (limit/page)
+    fetch(`http://localhost:5000/api/fields?q=${search}&limit=6&page=1`)
+      .then(res => res.json())
+      .then(res => setFields(res.data))
+      .catch(err => console.error(err));
+  }, [search]);
   return (
     <div className="space-y-10">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-gradient-to-r from-gray-900 to-black dark:from-luxury-cardDark dark:to-black p-8 rounded-3xl shadow-xl text-white">
