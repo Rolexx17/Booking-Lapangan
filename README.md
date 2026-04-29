@@ -89,37 +89,41 @@ Aplikasi ini dibangun menggunakan arsitektur modern **React (Frontend)** dan **N
 
 ## 📡 Daftar API Endpoints
 
-Aplikasi ini memiliki REST API terstruktur, berikut ringkasannya:
+Aplikasi ini memiliki REST API terstruktur :
 
-**Auth Endpoints:**
-- `POST /api/auth/register` - Daftar akun baru
-- `POST /api/auth/login` - Login pengguna
+### 🔐 Auth & Users
+- `POST /api/auth/register` - Mendaftarkan user baru
+- `POST /api/auth/login` - Login user
+- `GET /api/users` - Mengambil daftar semua user
+- `GET /api/users/:id` - Mengambil data profil user spesifik
+- `PUT /api/users/:id` - Memperbarui profil user
+- `DELETE /api/users/:id` - Menghapus akun user
 
-**Users Endpoints:**
-- `GET /api/users` - Mengambil semua data user
-- `GET /api/users/:id` - Mengambil detail profil
-- `PUT /api/users/:id` - Update profil user
-- `DELETE /api/users/:id` - Hapus akun user
+### 🏟️ Fields (Lapangan)
+- `GET /api/fields` - Mengambil daftar lapangan (mendukung paginasi & pencarian)
+- `GET /api/fields/:id` - Mengambil detail satu lapangan
+- `POST /api/fields` - Menambahkan data lapangan baru
+- `PUT /api/fields/:id` - Memperbarui data lapangan
+- `DELETE /api/fields/:id` - Menghapus data lapangan
 
-**Fields Endpoints:**
-- `GET /api/fields` - List semua lapangan (Mendukung paginasi & pencarian)
-- `GET /api/fields/:id` - Detail lapangan
-- `POST /api/fields` - Tambah lapangan baru
-- `PUT /api/fields/:id` - Update data lapangan
+### 📅 Bookings (Pemesanan)
+- `POST /api/bookings` - Membuat pesanan/booking baru
+- `GET /api/bookings` - Mengambil semua data booking di sistem
+- `GET /api/bookings/user/:userId` - Mengambil riwayat booking milik user tertentu
+- `PUT /api/bookings/:id/status` - Memperbarui status booking (Pending/Success/Cancelled)
+- `DELETE /api/bookings/:id` - Menghapus riwayat booking
 
-**Bookings Endpoints:**
-- `POST /api/bookings` - Membuat pesanan baru
-- `GET /api/bookings/user/:userId` - Riwayat pemesanan user tertentu
-- `PUT /api/bookings/:id/status` - Update status pemesanan (Success/Cancelled)
+### 🤝 Matchmakings (Mabar)
+- `GET /api/matchmakings` - Mengambil semua postingan ajakan mabar
+- `POST /api/matchmakings` - Membuat ajakan mabar baru
+- `PUT /api/matchmakings/:id` - Memperbarui data mabar
+- `DELETE /api/matchmakings/:id` - Menghapus ajakan mabar
 
-**Matchmakings Endpoints:**
-- `GET /api/matchmakings` - List ajakan mabar
-- `POST /api/matchmakings` - Buat ajakan mabar baru
-- `DELETE /api/matchmakings/:id` - Hapus mabar
-
-**Reviews Endpoints:**
-- `GET /api/fields/:fieldId/reviews` - Ambil ulasan dari suatu lapangan
-- `POST /api/fields/:fieldId/reviews` - Tambah ulasan
+### ⭐ Reviews (Ulasan)
+- `GET /api/fields/:fieldId/reviews` - Mengambil semua ulasan untuk lapangan tertentu
+- `POST /api/fields/:fieldId/reviews` - Menambahkan ulasan baru ke lapangan
+- `PUT /api/reviews/:id` - Memperbarui isi ulasan
+- `DELETE /api/reviews/:id` - Menghapus ulasan
 
 ---
 
