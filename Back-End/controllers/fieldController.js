@@ -56,6 +56,32 @@ class FieldController extends BaseController {
             this.sendError(res, 500, "Gagal menambahkan lapangan", error.message);
         }
     };
+
+    updateField = async (req, res) => {
+        try {
+            const { name, type, price, image } = req.body;
+            const [result] = await db.query(
+                'UPDATE fields SET name = ?, type = ?, price = ?, image = ? WHERE id = ?', 
+                [name, type, price, image, req.params.id]
+            );
+            
+            if (result.affectedRows === 0) return this.sendError(res, 404, "Lapangan tidak ditemukan");
+            this.sendSuccess(res, 200, "Lapangan berhasil diupdate", { id: req.params.id, name, type, price, image });
+        } catch (error) {
+            this.sendError(res, 500, "Gagal update data lapangan", error.message);
+        }
+    };
+
+    deleteField = async (req, res) => {
+        try {
+            const [result] = await db.query('DELETE FROM fields WHERE id = ?', [req.params.id]);
+            if (result.affectedRows === 0) return this.sendError(res, 404, "Lapangan tidak ditemukan");
+            
+            this.sendSuccess(res, 200, "Lapangan berhasil dihapus");
+        } catch (error) {
+            this.sendError(res, 500, "Gagal menghapus lapangan", error.message);
+        }
+    };
 }
 
 export default new FieldController();

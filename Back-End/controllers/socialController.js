@@ -67,6 +67,43 @@ class SocialController extends BaseController {
             this.sendError(res, 500, "Gagal menambahkan ulasan", error.message);
         }
     };
+
+    updateMatchmaking = async (req, res) => {
+        try {
+            const { skill_level, looking_for, time_schedule, note } = req.body;
+            const [result] = await db.query(
+                'UPDATE matchmakings SET skill_level = ?, looking_for = ?, time_schedule = ?, note = ? WHERE id = ?',
+                [skill_level, looking_for, time_schedule, note, req.params.id]
+            );
+            
+            if (result.affectedRows === 0) return this.sendError(res, 404, "Posting mabar tidak ditemukan");
+            this.sendSuccess(res, 200, "Posting mabar berhasil diupdate", { id: req.params.id });
+        } catch (error) {
+            this.sendError(res, 500, "Gagal update mabar", error.message);
+        }
+    };
+
+    deleteMatchmaking = async (req, res) => {
+        try {
+            const [result] = await db.query('DELETE FROM matchmakings WHERE id = ?', [req.params.id]);
+            if (result.affectedRows === 0) return this.sendError(res, 404, "Posting mabar tidak ditemukan");
+            
+            this.sendSuccess(res, 200, "Posting mabar berhasil dihapus");
+        } catch (error) {
+            this.sendError(res, 500, "Gagal menghapus mabar", error.message);
+        }
+    };
+
+    deleteReview = async (req, res) => {
+        try {
+            const [result] = await db.query('DELETE FROM reviews WHERE id = ?', [req.params.id]);
+            if (result.affectedRows === 0) return this.sendError(res, 404, "Ulasan tidak ditemukan");
+            
+            this.sendSuccess(res, 200, "Ulasan berhasil dihapus");
+        } catch (error) {
+            this.sendError(res, 500, "Gagal menghapus ulasan", error.message);
+        }
+    };
 }
 
 export default new SocialController();
