@@ -50,6 +50,11 @@ class FieldController extends BaseController {
     createField = async (req, res) => {
         try {
             const { name, type, price, image } = req.body;
+            
+            if (!name || !type || !price) {
+                return this.sendError(res, 400, "Data lapangan (name, type, price) harus diisi");
+            }
+
             const [result] = await db.query('INSERT INTO fields (name, type, price, image) VALUES (?, ?, ?, ?)', [name, type, price, image]);
             this.sendSuccess(res, 201, "Lapangan berhasil ditambahkan", { id: result.insertId, ...req.body });
         } catch (error) {
@@ -60,6 +65,11 @@ class FieldController extends BaseController {
     updateField = async (req, res) => {
         try {
             const { name, type, price, image } = req.body;
+            
+            if (!name || !type || !price) {
+                return this.sendError(res, 400, "Data lapangan (name, type, price) harus diisi");
+            }
+
             const [result] = await db.query(
                 'UPDATE fields SET name = ?, type = ?, price = ?, image = ? WHERE id = ?', 
                 [name, type, price, image, req.params.id]

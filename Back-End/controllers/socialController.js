@@ -27,6 +27,11 @@ class SocialController extends BaseController {
     createMatchmaking = async (req, res) => {
         try {
             const { user_id, field_id, skill_level, looking_for, time_schedule, note } = req.body;
+            
+            if (!user_id || !field_id || !skill_level || !looking_for || !time_schedule) {
+                return this.sendError(res, 400, "Data matchmaking (user_id, field_id, skill_level, looking_for, time_schedule) harus diisi");
+            }
+
             const [result] = await db.query(
                 'INSERT INTO matchmakings (user_id, field_id, skill_level, looking_for, time_schedule, note) VALUES (?, ?, ?, ?, ?, ?)',
                 [user_id, field_id, skill_level, looking_for, time_schedule, note]
@@ -40,6 +45,11 @@ class SocialController extends BaseController {
     updateMatchmaking = async (req, res) => {
         try {
             const { skill_level, looking_for, time_schedule, note } = req.body;
+            
+            if (!skill_level || !looking_for || !time_schedule) {
+                return this.sendError(res, 400, "Data update matchmaking (skill_level, looking_for, time_schedule) harus diisi");
+            }
+
             const [result] = await db.query(
                 'UPDATE matchmakings SET skill_level = ?, looking_for = ?, time_schedule = ?, note = ? WHERE id = ?',
                 [skill_level, looking_for, time_schedule, note, req.params.id]
@@ -82,6 +92,10 @@ class SocialController extends BaseController {
             const { user_id, rating, comment } = req.body;
             const field_id = req.params.fieldId;
             
+            if (!user_id || !rating || !comment) {
+                return this.sendError(res, 400, "Data ulasan (user_id, rating, comment) harus diisi");
+            }
+
             const [result] = await db.query(
                 'INSERT INTO reviews (user_id, field_id, rating, comment) VALUES (?, ?, ?, ?)',
                 [user_id, field_id, rating, comment]
@@ -101,6 +115,10 @@ class SocialController extends BaseController {
     updateReview = async (req, res) => {
         try {
             const { rating, comment } = req.body;
+            
+            if (!rating || !comment) {
+                return this.sendError(res, 400, "Data ulasan (rating, comment) harus diisi");
+            }
             
             const [reviewData] = await db.query('SELECT field_id FROM reviews WHERE id = ?', [req.params.id]);
             if (reviewData.length === 0) return this.sendError(res, 404, "Ulasan tidak ditemukan");

@@ -7,6 +7,11 @@ class AuthController extends BaseController {
     register = async (req, res) => {
         try {
             const { name, email, password } = req.body;
+            
+            if (!name || !email || !password) {
+                return this.sendError(res, 400, "Semua field (name, email, password) harus diisi");
+            }
+
             const [result] = await db.query('INSERT INTO users (name, email, password) VALUES (?, ?, ?)', [name, email, password]);
             this.sendSuccess(res, 201, "Registrasi berhasil", { id: result.insertId, name, email });
         } catch (error) {
@@ -17,6 +22,11 @@ class AuthController extends BaseController {
     login = async (req, res) => {
         try {
             const { email, password } = req.body;
+            
+            if (!email || !password) {
+                return this.sendError(res, 400, "Email dan password harus diisi");
+            }
+
             const [rows] = await db.query('SELECT * FROM users WHERE email = ? AND password = ?', [email, password]);
             
             if (rows.length === 0) return this.sendError(res, 401, "Email atau password salah");
@@ -52,6 +62,11 @@ class AuthController extends BaseController {
     updateUserProfile = async (req, res) => {
         try {
             const { name, email } = req.body;
+            
+            if (!name || !email) {
+                return this.sendError(res, 400, "Name dan email harus diisi");
+            }
+
             const [result] = await db.query('UPDATE users SET name = ?, email = ? WHERE id = ?', [name, email, req.params.id]);
             
             if (result.affectedRows === 0) return this.sendError(res, 404, "User tidak ditemukan");

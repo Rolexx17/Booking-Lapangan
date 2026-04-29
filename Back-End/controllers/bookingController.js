@@ -8,6 +8,10 @@ class BookingController extends BaseController {
         try {
             const { user_id, field_id, booking_date, time_slot, total_price } = req.body;
             
+            if (!user_id || !field_id || !booking_date || !time_slot || !total_price) {
+                return this.sendError(res, 400, "Data booking (user_id, field_id, booking_date, time_slot, total_price) harus diisi lengkap");
+            }
+
             const [existing] = await db.query(
                 `SELECT * FROM bookings WHERE field_id = ? AND booking_date = ? AND time_slot = ? AND status != 'Cancelled'`,
                 [field_id, booking_date, time_slot]
@@ -73,6 +77,11 @@ class BookingController extends BaseController {
     updateBookingStatus = async (req, res) => {
         try {
             const { status } = req.body;
+            
+            if (!status) {
+                return this.sendError(res, 400, "Status booking harus diisi");
+            }
+
             const [result] = await db.query('UPDATE bookings SET status = ? WHERE id = ?', [status, req.params.id]);
             
             if (result.affectedRows === 0) return this.sendError(res, 404, "Booking tidak ditemukan");
