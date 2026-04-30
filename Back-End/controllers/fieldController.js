@@ -165,6 +165,42 @@ class FieldController extends BaseController {
             this.sendError(res, 500, "Gagal menambahkan ulasan", error.message);
         }
     };
+
+    // Menghapus ulasan dan memperbarui rata-rata rating lapangan
+    deleteReview = async (req, res) => {
+        try {
+            const field_id = req.params.id;
+            const review_id = req.params.reviewId;
+
+            // 1. Hapus record dari tabel reviews
+            const [result] = await db.query(
+                'DELETE FROM reviews WHERE id = ? AND field_id = ?', 
+                [review_id, field_id]
+            );
+
+            if (result.affectedRows === 0) {
+                return this.sendError(res, 404, "Ulasan tidak ditemukan");
+            }
+
+            // 2. Hitung ulang rata-rata rating untuk lapangan ini setelah dihapus
+            const [ratingResult] = await db.query(
+                'SELECT AVG(rating) as avg_rating FROM reviews WHERE field_id = ?',
+                [field_id]
+            );
+            
+            const avgRating = ratingResult[0].avg_rating ? parseFloat(ratingResult[0].avg_rating).toFixed(1) : 0;
+
+            // 3. Update tabel fields dengan rating baru
+            await db.query(
+                'UPDATE fields SET rating = ? WHERE id = ?',
+                [avgRating, field_id]
+            );
+
+            this.sendSuccess(res, 200, "Ulasan berhasil dihapus dan rating diperbarui");
+        } catch (error) {
+            this.sendError(res, 500, "Gagal menghapus ulasan", error.message);
+        }
+    };
 }
 
 export default new FieldController();
