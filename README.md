@@ -152,4 +152,37 @@ Booking-Lapangan/
 
 ---
 
-## 👨‍💻 Author
+## 👥 Authors
+
+<table border="0" cellspacing="10" cellpadding="5">
+  <tr>
+    <td align="center" style="border: 1px solid #555; padding: 10px;">
+      <a href="https://github.com/Rolexx17">
+        <img src="https://github.com/Rolexx17.png" width="100" height="100" alt="Jess2Jes" style="border-radius: 50%;"/>
+      </a>
+      <br/>
+      <a href="https://github.com/Rolexx17">Justin Wisely</a>
+    </td>
+    <td align="center" style="border: 1px solid #555; padding: 10px;">
+      <a href="https://github.com/cherriebuns">
+        <img src="https://github.com/cherriebuns.png" width="100" height="100" alt="Hans 展豪" style="border-radius: 50%;"/>
+      </a>
+      <br/>
+      <a href="https://github.com/cherriebuns">Cherish Evangeline</a>
+    </td>
+    <td align="center" style="border: 1px solid #555; padding: 10px;">
+      <a href="https://github.com/isthatyou-aye">
+        <img src="https://github.com/isthatyou-aye.png" width="100" height="100" alt="isthatyou-aye" style="border-radius: 50%;"/>
+      </a>
+      <br/>
+      <a href="https://github.com/isthatyou-aye">Kelvin Kurniawan</a>
+    </td>
+    <td align="center" style="border: 1px solid #555; padding: 10px;">
+      <a href="https://github.com/calvinprayogo">
+        <img src="https://github.com/calvinprayogo.png" width="100" height="100" alt="Hans 展豪" style="border-radius: 50%;"/>
+      </a>
+      <br/>
+      <a href="https://github.com/calvinprayogo">Calvin Prayogo</a>
+    </td>
+  </tr>
+</table>
