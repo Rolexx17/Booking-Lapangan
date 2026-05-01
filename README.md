@@ -144,9 +144,7 @@ DELIMITER ;
    ```
 4. Jalankan server Backend:
    ```bash
-   npm start
-   # atau
-   node server.js
+   npm run dev
    ```
    *Server akan berjalan di `http://localhost:5000`*
 
@@ -241,28 +239,28 @@ Booking-Lapangan/
         <img src="https://github.com/Rolexx17.png" width="100" height="100" alt="Jess2Jes" style="border-radius: 50%;"/>
       </a>
       <br/>
-      <a href="https://github.com/Rolexx17">Justin Wisely</a>
+      <a href="https://github.com/Rolexx17">Justin Wisely (241110868)</a>
     </td>
     <td align="center" style="border: 1px solid #555; padding: 10px;">
       <a href="https://github.com/cherriebuns">
         <img src="https://github.com/cherriebuns.png" width="100" height="100" alt="Hans 展豪" style="border-radius: 50%;"/>
       </a>
       <br/>
-      <a href="https://github.com/cherriebuns">Cherish Evangeline</a>
+      <a href="https://github.com/cherriebuns">Cherish Evangeline (241110597)</a>
     </td>
     <td align="center" style="border: 1px solid #555; padding: 10px;">
       <a href="https://github.com/isthatyou-aye">
         <img src="https://github.com/isthatyou-aye.png" width="100" height="100" alt="isthatyou-aye" style="border-radius: 50%;"/>
       </a>
       <br/>
-      <a href="https://github.com/isthatyou-aye">Kelvin Kurniawan</a>
+      <a href="https://github.com/isthatyou-aye">Kelvin Kurniawan (241112232)</a>
     </td>
     <td align="center" style="border: 1px solid #555; padding: 10px;">
       <a href="https://github.com/calvinprayogo">
         <img src="https://github.com/calvinprayogo.png" width="100" height="100" alt="Hans 展豪" style="border-radius: 50%;"/>
       </a>
       <br/>
-      <a href="https://github.com/calvinprayogo">Calvin Prayogo</a>
+      <a href="https://github.com/calvinprayogo">Calvin Prayogo (241112730)</a>
     </td>
   </tr>
 </table>
