@@ -1,41 +1,37 @@
 // Titik masuk (entry point) utama untuk server
 
-// File ini mengonfigurasi dan menjalankan server web Express.
-// File ini mengatur middleware, routing, dan penanganan untuk rute yang tidak ditemukan.
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import apiRoutes from './routes/api.js';
-import sendResponse from './utils/response.js';
+import { notFoundHandler, globalErrorHandler } from './middlewares/errorHandler.js';
 
-// Memuat variabel lingkungan dari file .env
 dotenv.config();
 
-// Menginisialisasi aplikasi Express
 const app = express();
 
-// Mengaktifkan Cross-Origin Resource Sharing (CORS) agar API dapat diakses dari domain lain
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || '*'
+  })
+);
 
-// Mem-parsing permintaan (request) yang masuk dalam format JSON
 app.use(express.json());
-
-// Mem-parsing data yang dikirim melalui URL-encoded (misalnya dari form)
 app.use(express.urlencoded({ extended: true }));
 
-// Mendaftarkan semua rute API di bawah awalan endpoint '/api'
-app.use('/api', apiRoutes);
-
-// Menangani permintaan untuk endpoint yang tidak terdaftar (Fallback 404)
-app.use((req, res) => {
-    sendResponse(res, 404, "Endpoint tidak ditemukan");
+app.get('/health', (req, res) => {
+  res.status(200).json({ success: true, message: 'OK', data: { uptime: process.uptime() } });
 });
 
-// Menentukan port tempat server akan berjalan
-const PORT = process.env.PORT || 5000;
+app.use('/api', apiRoutes);
 
-// Menjalankan server dan mencetak status port pada konsol
+// 404 handler
+app.use(notFoundHandler);
+
+// Global error handler
+app.use(globalErrorHandler);
+
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`Server Lumina Arena berjalan di port ${PORT}`);
+  console.log(`Server Lumina Arena berjalan di port ${PORT}`);
 });

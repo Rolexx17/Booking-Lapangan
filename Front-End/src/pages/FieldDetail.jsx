@@ -21,8 +21,10 @@ export default function FieldDetail() {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
-  const [notif, setNotif] = useState({ show: false, msg: '' });
+  const [notif, setNotif] = useState({ show: false, msg: '', type: 'success' });
   const [loading, setLoading] = useState(false);
+
+  const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
 
   useEffect(() => {
     fetchFieldDetail();
@@ -47,7 +49,7 @@ export default function FieldDetail() {
 
     const user = getCurrentUser();
     if (!user) {
-      setNotif({ show: true, msg: 'Silakan login untuk memberi ulasan' });
+      showNotif('Silakan login untuk memberi ulasan', 'error');
       setTimeout(() => navigate('/login'), 1000);
       return;
     }
@@ -58,12 +60,12 @@ export default function FieldDetail() {
     });
 
     if (ok && data.success) {
-      setNotif({ show: true, msg: 'Ulasan berhasil diposting!' });
+      showNotif('Ulasan berhasil diposting!');
       setNewReview({ rating: 5, comment: '' });
       fetchReviews();
       fetchFieldDetail();
     } else {
-      setNotif({ show: true, msg: data?.errors?.[0]?.message || data?.message || 'Gagal posting ulasan' });
+      showNotif(data?.errors?.[0]?.message || data?.message || 'Gagal posting ulasan', 'error');
     }
   };
 
@@ -71,7 +73,7 @@ export default function FieldDetail() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-12">
-      <Notification message={notif.msg} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '' })} />
+      <Notification message={notif.msg} type={notif.type} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '', type: 'success' })} />
 
       <div className="w-full h-[250px] sm:h-[320px] lg:h-[400px] rounded-3xl overflow-hidden relative bg-gray-900">
         <img src={field.image || 'https://images.unsplash.com/photo-1551958219-acbc608c6377?auto=format&fit=crop&q=80&w=1200'} className="w-full h-full object-cover" alt={field.name} />

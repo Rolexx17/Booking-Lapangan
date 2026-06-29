@@ -7,13 +7,15 @@ import { apiFetch, getCurrentUser } from '../lib/api';
 export default function BookingForm() {
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
-  const [notif, setNotif] = useState({ show: false, msg: '' });
+  const [notif, setNotif] = useState({ show: false, msg: '', type: 'success' });
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   const location = useLocation();
   const navigate = useNavigate();
   const { field, selectedSlot } = location.state || {};
+
+  const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
 
   const handleDragOver = (e) => e.preventDefault();
   const handleDrop = (e) => {
@@ -28,7 +30,7 @@ export default function BookingForm() {
 
     const user = getCurrentUser();
     if (!user) {
-      setNotif({ show: true, msg: 'Silakan login terlebih dahulu' });
+      showNotif('Silakan login terlebih dahulu', 'error');
       setTimeout(() => navigate('/login'), 900);
       return;
     }
@@ -40,7 +42,8 @@ export default function BookingForm() {
         field_id: field.id,
         booking_date: today,
         time_slot: selectedSlot,
-        total_price: field.price
+        total_price: field.price,
+        payment_proof: file?.name || null
       };
 
       const { ok, data } = await apiFetch('/bookings', {
@@ -49,13 +52,13 @@ export default function BookingForm() {
       });
 
       if (ok && data.success) {
-        setNotif({ show: true, msg: 'Pembayaran berhasil diunggah! Menunggu konfirmasi admin.' });
-        setTimeout(() => navigate('/dashboard'), 1300);
+        showNotif('Pembayaran berhasil diunggah! Menunggu konfirmasi admin.');
+        setTimeout(() => navigate('/dashboard'), 1200);
       } else {
-        setNotif({ show: true, msg: data?.errors?.[0]?.message || data?.message || 'Gagal membuat pesanan' });
+        showNotif(data?.errors?.[0]?.message || data?.message || 'Gagal membuat pesanan', 'error');
       }
     } catch {
-      setNotif({ show: true, msg: 'Terjadi kesalahan menghubungi server' });
+      showNotif('Terjadi kesalahan menghubungi server', 'error');
     } finally {
       setLoading(false);
     }
@@ -65,7 +68,7 @@ export default function BookingForm() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <Notification message={notif.msg} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '' })} />
+      <Notification message={notif.msg} type={notif.type} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '', type: 'success' })} />
 
       <div className="flex justify-between items-center mb-12 relative">
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-gray-200 dark:bg-gray-800 -z-10 rounded-full" />
@@ -75,7 +78,9 @@ export default function BookingForm() {
         />
         {['Detail', 'Pembayaran', 'Selesai'].map((label, idx) => (
           <div key={idx} className="flex flex-col items-center gap-2">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 shadow-lg ${step > idx ? 'bg-luxury-gold text-white scale-110' : 'bg-gray-200 text-gray-500'}`}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 shadow-lg ${
+              step > idx ? 'bg-luxury-gold text-white scale-110' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'
+            }`}>
               {step > idx + 1 ? <Check className="w-5 h-5" /> : idx + 1}
             </div>
             <span className={`text-sm font-medium ${step >= idx + 1 ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>{label}</span>

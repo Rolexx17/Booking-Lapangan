@@ -5,7 +5,7 @@ import { apiFetch, getCurrentUser } from '../lib/api';
 
 export default function Matchmaking() {
   const [matches, setMatches] = useState([]);
-  const [notif, setNotif] = useState({ show: false, msg: '' });
+  const [notif, setNotif] = useState({ show: false, msg: '', type: 'success' });
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [fields, setFields] = useState([]);
@@ -18,6 +18,7 @@ export default function Matchmaking() {
   });
 
   const currentUser = getCurrentUser();
+  const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
 
   useEffect(() => {
     fetchMatchmakings();
@@ -26,27 +27,23 @@ export default function Matchmaking() {
 
   const fetchFields = async () => {
     const { ok, data } = await apiFetch('/fields?page=1&limit=100');
-    if (ok && data.success) {
-      setFields(data.data || []);
-    }
+    if (ok && data.success) setFields(data.data || []);
   };
 
   const fetchMatchmakings = async () => {
     setLoading(true);
     const { ok, data } = await apiFetch('/matchmakings?page=1&limit=30');
-    if (ok && data.success) {
-      setMatches(data.data || []);
-    }
+    if (ok && data.success) setMatches(data.data || []);
     setLoading(false);
   };
 
   const handleDeleteMatchmaking = async (id) => {
     const { ok, data } = await apiFetch(`/matchmakings/${id}`, { method: 'DELETE' });
     if (ok && data.success) {
-      setNotif({ show: true, msg: 'Postingan berhasil dihapus' });
+      showNotif('Postingan berhasil dihapus');
       fetchMatchmakings();
     } else {
-      setNotif({ show: true, msg: data?.message || 'Gagal menghapus postingan' });
+      showNotif(data?.message || 'Gagal menghapus postingan', 'error');
     }
   };
 
@@ -54,7 +51,7 @@ export default function Matchmaking() {
     e.preventDefault();
 
     if (!currentUser) {
-      setNotif({ show: true, msg: 'Silakan login terlebih dahulu' });
+      showNotif('Silakan login terlebih dahulu', 'error');
       return;
     }
 
@@ -72,24 +69,18 @@ export default function Matchmaking() {
     });
 
     if (ok && data.success) {
-      setNotif({ show: true, msg: 'Ajakan mabar berhasil diposting!' });
-      setForm({
-        field_id: '',
-        skill_level: '',
-        looking_for: 1,
-        time_schedule: '',
-        note: ''
-      });
+      showNotif('Ajakan mabar berhasil diposting!');
+      setForm({ field_id: '', skill_level: '', looking_for: 1, time_schedule: '', note: '' });
       setShowCreateForm(false);
       fetchMatchmakings();
     } else {
-      setNotif({ show: true, msg: data?.errors?.[0]?.message || data?.message || 'Gagal memposting mabar' });
+      showNotif(data?.errors?.[0]?.message || data?.message || 'Gagal memposting mabar', 'error');
     }
   };
 
   return (
     <div className="space-y-10">
-      <Notification message={notif.msg} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '' })} />
+      <Notification message={notif.msg} type={notif.type} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '', type: 'success' })} />
 
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-gradient-to-r from-gray-900 to-black dark:from-luxury-cardDark dark:to-black p-6 sm:p-8 rounded-3xl shadow-xl text-white">
         <div>
@@ -101,7 +92,7 @@ export default function Matchmaking() {
 
         <button
           onClick={() => {
-            if (!currentUser) return setNotif({ show: true, msg: 'Login dulu untuk membuat ajakan main' });
+            if (!currentUser) return showNotif('Login dulu untuk membuat ajakan main', 'error');
             setShowCreateForm((prev) => !prev);
           }}
           className="px-6 py-3 bg-luxury-gold text-white font-bold rounded-full hover:scale-105 transition-all duration-300 flex items-center gap-2"
@@ -112,7 +103,7 @@ export default function Matchmaking() {
 
       {showCreateForm && (
         <form onSubmit={handleCreateMatchmaking} className="bg-white dark:bg-luxury-cardDark border border-gray-200 dark:border-gray-800 rounded-3xl p-5 sm:p-6 shadow-lg grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-1">
+          <div>
             <label className="text-sm font-medium">Pilih Lapangan</label>
             <select
               value={form.field_id}
@@ -127,7 +118,7 @@ export default function Matchmaking() {
             </select>
           </div>
 
-          <div className="md:col-span-1">
+          <div>
             <label className="text-sm font-medium">Level Skill</label>
             <select
               value={form.skill_level}
@@ -142,7 +133,7 @@ export default function Matchmaking() {
             </select>
           </div>
 
-          <div className="md:col-span-1">
+          <div>
             <label className="text-sm font-medium">Butuh Berapa Pemain</label>
             <input
               type="number"
@@ -154,7 +145,7 @@ export default function Matchmaking() {
             />
           </div>
 
-          <div className="md:col-span-1">
+          <div>
             <label className="text-sm font-medium">Jadwal</label>
             <input
               type="text"
@@ -225,7 +216,7 @@ export default function Matchmaking() {
               </div>
 
               <button
-                onClick={() => setNotif({ show: true, msg: 'Fitur chat tim akan segera hadir 🚀' })}
+                onClick={() => showNotif('Fitur chat tim akan segera hadir 🚀')}
                 className="w-full py-3 bg-gray-100 dark:bg-gray-900 hover:bg-black dark:hover:bg-white text-gray-900 dark:text-gray-100 hover:text-white dark:hover:text-black rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
               >
                 <MessageCircle className="w-4 h-4" /> Join Skuad

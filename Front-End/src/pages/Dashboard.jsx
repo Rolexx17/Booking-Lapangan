@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import { User, Settings, Clock, MapPin, XCircle, Trash2, Edit2, CheckCircle2 } from 'lucide-react';
 import Notification from '../components/Notification';
-import { apiFetch, getCurrentUser } from '../lib/api';
+import { apiFetch, getCurrentUser, setSession } from '../lib/api';
 
 export default function Dashboard() {
   const [historyData, setHistoryData] = useState([]);
   const [profile, setProfile] = useState({ name: '', email: '', role: 'customer' });
   const [isEditing, setIsEditing] = useState(false);
-  const [notif, setNotif] = useState({ show: false, msg: '' });
+  const [notif, setNotif] = useState({ show: false, msg: '', type: 'success' });
   const [loading, setLoading] = useState(false);
 
   const currentUser = getCurrentUser();
+  const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
 
   useEffect(() => {
     if (!currentUser) return;
@@ -24,9 +25,8 @@ export default function Dashboard() {
   };
 
   const fetchBookings = async () => {
-    if (!currentUser?.id) return;
     setLoading(true);
-    const { ok, data } = await apiFetch(`/bookings/user/${currentUser.id}`);
+    const { ok, data } = await apiFetch('/bookings/me');
     if (ok && data.success && data.data) setHistoryData(data.data);
     setLoading(false);
   };
@@ -42,11 +42,11 @@ export default function Dashboard() {
 
     if (ok && data.success) {
       const updatedUser = { ...(currentUser || {}), name: profile.name, email: profile.email, role: profile.role };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setSession({ user: updatedUser });
       setIsEditing(false);
-      setNotif({ show: true, msg: 'Profil berhasil diperbarui' });
+      showNotif('Profil berhasil diperbarui');
     } else {
-      setNotif({ show: true, msg: data?.errors?.[0]?.message || data?.message || 'Gagal update profil' });
+      showNotif(data?.errors?.[0]?.message || data?.message || 'Gagal update profil', 'error');
     }
   };
 
@@ -55,27 +55,28 @@ export default function Dashboard() {
       method: 'PUT',
       body: JSON.stringify({ status: 'Cancelled' })
     });
+
     if (ok && data.success) {
-      setNotif({ show: true, msg: 'Booking berhasil dibatalkan' });
+      showNotif('Booking berhasil dibatalkan');
       fetchBookings();
     } else {
-      setNotif({ show: true, msg: data?.message || 'Gagal membatalkan booking' });
+      showNotif(data?.message || 'Gagal membatalkan booking', 'error');
     }
   };
 
   const handleDeleteBooking = async (id) => {
     const { ok, data } = await apiFetch(`/bookings/${id}`, { method: 'DELETE' });
     if (ok && data.success) {
-      setNotif({ show: true, msg: 'Riwayat berhasil dihapus' });
+      showNotif('Riwayat berhasil dihapus');
       fetchBookings();
     } else {
-      setNotif({ show: true, msg: data?.message || 'Gagal menghapus riwayat' });
+      showNotif(data?.message || 'Gagal menghapus riwayat', 'error');
     }
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      <Notification message={notif.msg} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '' })} />
+      <Notification message={notif.msg} type={notif.type} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '', type: 'success' })} />
 
       <div className="lg:col-span-1 space-y-6">
         <div className="bg-white dark:bg-luxury-cardDark border border-gray-200 dark:border-gray-800 rounded-3xl p-8 text-center shadow-lg relative">
@@ -90,8 +91,20 @@ export default function Dashboard() {
 
           {isEditing ? (
             <form onSubmit={handleUpdateProfile} className="space-y-3 mt-4 text-left">
-              <input type="text" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} className="w-full p-2 border rounded-lg dark:bg-gray-900 dark:border-gray-700 text-sm" />
-              <input type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} className="w-full p-2 border rounded-lg dark:bg-gray-900 dark:border-gray-700 text-sm" />
+              <input
+                type="text"
+                value={profile.name}
+                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-900 dark:border-gray-700 text-sm"
+                required
+              />
+              <input
+                type="email"
+                value={profile.email}
+                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-900 dark:border-gray-700 text-sm"
+                required
+              />
               <button type="submit" className="w-full py-2 bg-luxury-gold text-white rounded-lg text-sm font-bold flex justify-center items-center gap-2">
                 <CheckCircle2 className="w-4 h-4" /> Simpan
               </button>

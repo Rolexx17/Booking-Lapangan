@@ -9,6 +9,7 @@ import Auth from './pages/Auth';
 import BookingForm from './pages/BookingForm';
 import Dashboard from './pages/Dashboard';
 import Matchmaking from './pages/Matchmaking';
+import AdminPanel from './pages/AdminPanel';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
             <Route path="field/:id" element={<FieldDetail />} />
+
             <Route
               path="booking-form"
               element={
@@ -26,6 +28,7 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
             <Route
               path="dashboard"
               element={
@@ -34,6 +37,16 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
+            <Route
+              path="admin"
+              element={
+                <ProtectedRoute allowRoles={['admin', 'kasir']}>
+                  <AdminPanel />
+                </ProtectedRoute>
+              }
+            />
+
             <Route path="matchmaking" element={<Matchmaking />} />
             <Route path="login" element={<Auth />} />
           </Route>

@@ -19,7 +19,6 @@ export default function Layout() {
   }, []);
 
   useEffect(() => {
-    // refresh user profile jika ada token
     const token = localStorage.getItem('token');
     if (!token) return;
 
@@ -58,6 +57,9 @@ export default function Layout() {
               <Link to="/" className="hover:text-luxury-gold transition">Katalog</Link>
               <Link to="/matchmaking" className="hover:text-luxury-gold transition">Matchmaking</Link>
               {me && <Link to="/dashboard" className="hover:text-luxury-gold transition">Dashboard</Link>}
+              {(me?.role === 'admin' || me?.role === 'kasir') && (
+                <Link to="/admin" className="hover:text-luxury-gold transition">Admin Panel</Link>
+              )}
 
               <div className="flex items-center space-x-3 border-l pl-4 border-gray-300 dark:border-gray-700">
                 <div className="relative">
@@ -122,6 +124,9 @@ export default function Layout() {
               <Link to="/" className="block px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">Katalog</Link>
               <Link to="/matchmaking" className="block px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">Matchmaking</Link>
               {me && <Link to="/dashboard" className="block px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">Dashboard</Link>}
+              {(me?.role === 'admin' || me?.role === 'kasir') && (
+                <Link to="/admin" className="block px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">Admin Panel</Link>
+              )}
 
               {!me ? (
                 <Link to="/login" className="block px-3 py-2 rounded-md bg-black text-white">Sign In</Link>

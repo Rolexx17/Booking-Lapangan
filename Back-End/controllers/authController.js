@@ -1,132 +1,222 @@
 // Controller untuk Autentikasi dan Manajemen Pengguna
 
-// Kelas ini menangani proses registrasi, login, dan pengelolaan profil pengguna.
-// Kelas ini mewarisi BaseController untuk menggunakan format respons standar.
-
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import db from '../config/db.js';
 import BaseController from '../utils/BaseController.js';
 
 class AuthController extends BaseController {
-    // Menginisialisasi controller dengan nama resource 'Auth'
-    constructor() { super('Auth'); }
+    constructor() {
+        super('Auth');
+    }
 
-    // Mendaftarkan pengguna baru (Register)
+    // Register user baru
     register = async (req, res) => {
         try {
-            // Mengekstrak data pengguna dari body request
-            const { name, email, password } = req.body;
-            
-            // Memvalidasi bahwa semua field yang diwajibkan telah diisi
+            const { name, email, password, role } = req.body;
+
             if (!name || !email || !password) {
-                return this.sendError(res, 400, "Semua field (name, email, password) harus diisi");
+                return this.sendError(res, 400, 'Semua field (name, email, password) harus diisi');
             }
 
-            // Memasukkan data pengguna baru ke dalam database
-            const [result] = await db.query('INSERT INTO users (name, email, password) VALUES (?, ?, ?)', [name, email, password]);
-            
-            // Mengembalikan respons sukses beserta data pengguna yang didaftarkan
-            this.sendSuccess(res, 201, "Registrasi berhasil", { id: result.insertId, name, email });
+            const normalizedEmail = String(email).trim().toLowerCase();
+
+            // Cek email sudah dipakai
+            const [exists] = await db.query('SELECT id FROM users WHERE email = ? LIMIT 1', [normalizedEmail]);
+            if (exists.length > 0) {
+                return this.sendError(res, 409, 'Email sudah terdaftar');
+            }
+
+            // Hash password
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            // Role hanya boleh di-set admin/kasir oleh admin (di route nanti)
+            const userRole = role || 'customer';
+
+            const [result] = await db.query(
+                'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+                [name, normalizedEmail, hashedPassword, userRole]
+            );
+
+            this.sendSuccess(res, 201, 'Registrasi berhasil', {
+                id: result.insertId,
+                name,
+                email: normalizedEmail,
+                role: userRole
+            });
         } catch (error) {
-            // Menangani error, kemungkinan karena email sudah terdaftar sebelumnya
-            this.sendError(res, 500, "Gagal registrasi (Email mungkin sudah terdaftar)", error.message);
+            this.sendError(res, 500, 'Gagal registrasi', error.message);
         }
     };
 
-    // Mengautentikasi pengguna yang sudah ada (Login)
+    // Login user
     login = async (req, res) => {
         try {
-            // Mengekstrak kredensial login dari request
             const { email, password } = req.body;
-            
-            // Memvalidasi input dari pengguna
+
             if (!email || !password) {
-                return this.sendError(res, 400, "Email dan password harus diisi");
+                return this.sendError(res, 400, 'Email dan password harus diisi');
             }
 
-            // Memeriksa apakah terdapat pengguna dengan kredensial yang sesuai di database
-            const [rows] = await db.query('SELECT * FROM users WHERE email = ? AND password = ?', [email, password]);
-            
-            // Mengembalikan pesan error jika tidak ada pengguna yang cocok
-            if (rows.length === 0) return this.sendError(res, 401, "Email atau password salah");
-            
-            // Membuat token dummy sederhana untuk keperluan autentikasi
-            const token = Buffer.from(`${email}:${Date.now()}`).toString('base64'); // Dummy Token
-            
-            // Menghapus password dari payload respons untuk alasan keamanan
-            delete rows[0].password;
-            
-            // Mengembalikan respons sukses dengan token dan data profil pengguna
-            this.sendSuccess(res, 200, "Login berhasil", { token, user: rows[0] });
+            const normalizedEmail = String(email).trim().toLowerCase();
+
+            const [rows] = await db.query('SELECT * FROM users WHERE email = ? LIMIT 1', [normalizedEmail]);
+            if (rows.length === 0) return this.sendError(res, 401, 'Email atau password salah');
+
+            const user = rows[0];
+
+            // 1) Coba bcrypt compare dulu
+            let isPasswordValid = false;
+            if (typeof user.password === 'string' && user.password.startsWith('$2')) {
+                isPasswordValid = await bcrypt.compare(password, user.password);
+            } else {
+                // 2) Fallback untuk data lama plain text
+                isPasswordValid = password === user.password;
+
+                // Jika valid plain text -> upgrade otomatis ke hash
+                if (isPasswordValid) {
+                    const newHash = await bcrypt.hash(password, 10);
+                    await db.query('UPDATE users SET password = ? WHERE id = ?', [newHash, user.id]);
+                }
+            }
+
+            if (!isPasswordValid) return this.sendError(res, 401, 'Email atau password salah');
+
+            const token = jwt.sign(
+                { userId: user.id, role: user.role },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
+            );
+
+            delete user.password;
+
+            this.sendSuccess(res, 200, 'Login berhasil', { token, user });
         } catch (error) {
-            this.sendError(res, 500, "Gagal login", error.message);
+            this.sendError(res, 500, 'Gagal login', error.message);
         }
     };
 
-    // Mengambil semua data pengguna dari database
+    // Profil user yang sedang login
+    me = async (req, res) => {
+        try {
+            this.sendSuccess(res, 200, 'Profil user saat ini', req.user);
+        } catch (error) {
+            this.sendError(res, 500, 'Gagal mengambil profil', error.message);
+        }
+    };
+
+    // Semua user (admin/kasir)
     getAllUsers = async (req, res) => {
         try {
-            // Mengambil daftar pengguna yang diurutkan berdasarkan ID secara menurun
-            const [rows] = await db.query('SELECT id, name, email, role, created_at FROM users ORDER BY id DESC');
-            this.sendSuccess(res, 200, "Daftar semua user", rows);
-        } catch (error) {
-            this.sendError(res, 500, "Gagal mengambil daftar user", error.message);
-        }
-    };
+            const page = Math.max(parseInt(req.query.page) || 1, 1);
+            const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100);
+            const q = req.query.q ? String(req.query.q).trim() : '';
+            const role = req.query.role ? String(req.query.role).trim() : '';
+            const offset = (page - 1) * limit;
 
-    // Mengambil data profil pengguna tertentu berdasarkan ID
-    getUserProfile = async (req, res) => {
-        try {
-            // Mengambil data pengguna berdasarkan parameter ID dari URL
-            const [rows] = await db.query('SELECT id, name, email, role, created_at FROM users WHERE id = ?', [req.params.id]);
-            
-            // Mengembalikan status 404 jika pengguna tidak ditemukan
-            if (rows.length === 0) return this.sendError(res, 404, "User tidak ditemukan");
-            
-            this.sendSuccess(res, 200, "Profil user", rows[0]);
-        } catch (error) {
-            this.sendError(res, 500, "Gagal mengambil profil", error.message);
-        }
-    };
+            let query = 'SELECT id, name, email, role, created_at FROM users';
+            let countQuery = 'SELECT COUNT(*) as total FROM users';
+            const params = [];
+            const countParams = [];
+            const where = [];
 
-    // Memperbarui informasi profil pengguna
-    updateUserProfile = async (req, res) => {
-        try {
-            // Mengekstrak data yang akan diperbarui
-            const { name, email } = req.body;
-            
-            // Memvalidasi input dari pengguna
-            if (!name || !email) {
-                return this.sendError(res, 400, "Name dan email harus diisi");
+            if (q) {
+                where.push('(name LIKE ? OR email LIKE ?)');
+                params.push(`%${q}%`, `%${q}%`);
+                countParams.push(`%${q}%`, `%${q}%`);
             }
 
-            // Memperbarui data pengguna di dalam database
-            const [result] = await db.query('UPDATE users SET name = ?, email = ? WHERE id = ?', [name, email, req.params.id]);
-            
-            // Mengembalikan status 404 jika pengguna yang akan diperbarui tidak ditemukan
-            if (result.affectedRows === 0) return this.sendError(res, 404, "User tidak ditemukan");
-            
-            this.sendSuccess(res, 200, "Profil berhasil diupdate", { id: req.params.id, name, email });
+            if (role) {
+                where.push('role = ?');
+                params.push(role);
+                countParams.push(role);
+            }
+
+            if (where.length > 0) {
+                query += ` WHERE ${where.join(' AND ')}`;
+                countQuery += ` WHERE ${where.join(' AND ')}`;
+            }
+
+            query += ' ORDER BY id DESC LIMIT ? OFFSET ?';
+            params.push(limit, offset);
+
+            const [rows] = await db.query(query, params);
+            const [totalRows] = await db.query(countQuery, countParams);
+
+            this.sendSuccess(res, 200, 'Daftar semua user', rows, {
+                page,
+                limit,
+                totalItems: totalRows[0].total,
+                totalPages: Math.ceil(totalRows[0].total / limit)
+            });
         } catch (error) {
-            this.sendError(res, 500, "Gagal update profil", error.message);
+            this.sendError(res, 500, 'Gagal mengambil daftar user', error.message);
         }
     };
 
-    // Menghapus pengguna dari sistem
+    getUserProfile = async (req, res) => {
+        try {
+            const [rows] = await db.query(
+                'SELECT id, name, email, role, created_at FROM users WHERE id = ? LIMIT 1',
+                [req.params.id]
+            );
+            if (rows.length === 0) return this.sendError(res, 404, 'User tidak ditemukan');
+
+            this.sendSuccess(res, 200, 'Profil user', rows[0]);
+        } catch (error) {
+            this.sendError(res, 500, 'Gagal mengambil profil', error.message);
+        }
+    };
+
+    updateUserProfile = async (req, res) => {
+        try {
+            const { name, email } = req.body;
+
+            if (!name || !email) {
+                return this.sendError(res, 400, 'Name dan email harus diisi');
+            }
+
+            const normalizedEmail = String(email).trim().toLowerCase();
+
+            // Cek email bentrok user lain
+            const [emailCheck] = await db.query(
+                'SELECT id FROM users WHERE email = ? AND id != ? LIMIT 1',
+                [normalizedEmail, req.params.id]
+            );
+            if (emailCheck.length > 0) return this.sendError(res, 409, 'Email sudah digunakan user lain');
+
+            const [result] = await db.query(
+                'UPDATE users SET name = ?, email = ? WHERE id = ?',
+                [name, normalizedEmail, req.params.id]
+            );
+
+            if (result.affectedRows === 0) return this.sendError(res, 404, 'User tidak ditemukan');
+
+            this.sendSuccess(res, 200, 'Profil berhasil diupdate', {
+                id: Number(req.params.id),
+                name,
+                email: normalizedEmail
+            });
+        } catch (error) {
+            this.sendError(res, 500, 'Gagal update profil', error.message);
+        }
+    };
+
     deleteUser = async (req, res) => {
         try {
-            // Menghapus pengguna berdasarkan parameter ID
             const [result] = await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
-            
-            // Mengembalikan status 404 jika pengguna tidak ditemukan
-            if (result.affectedRows === 0) return this.sendError(res, 404, "User tidak ditemukan");
-            
-            this.sendSuccess(res, 200, "User berhasil dihapus");
+            if (result.affectedRows === 0) return this.sendError(res, 404, 'User tidak ditemukan');
+
+            this.sendSuccess(res, 200, 'User berhasil dihapus');
         } catch (error) {
-            // Menangani error, misalnya karena kegagalan pada batasan foreign key (data saling terikat)
-            this.sendError(res, 500, "Gagal menghapus user (Pastikan user tidak terikat dengan data pesanan/booking)", error.message);
+            this.sendError(
+                res,
+                500,
+                'Gagal menghapus user (Pastikan user tidak terikat dengan data pesanan/booking)',
+                error.message
+            );
         }
     };
 }
 
-// Mengekspor instance tunggal (singleton) dari AuthController
 export default new AuthController();

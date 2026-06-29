@@ -17,29 +17,45 @@ export function getCurrentUser() {
 export function setSession({ token, user }) {
   if (token) localStorage.setItem('token', token);
   if (user) localStorage.setItem('user', JSON.stringify(user));
+  // trigger update tab yang sama
+  window.dispatchEvent(new Event('storage'));
 }
 
 export function clearSession() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  window.dispatchEvent(new Event('storage'));
 }
 
 export async function apiFetch(path, options = {}) {
   const token = getToken();
 
   const headers = {
-    'Content-Type': 'application/json',
     ...(options.headers || {})
   };
+
+  // set content-type json jika body bukan FormData
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      data: { success: false, message: 'Gagal menghubungi server' }
+    };
+  }
 
   let data = null;
   try {

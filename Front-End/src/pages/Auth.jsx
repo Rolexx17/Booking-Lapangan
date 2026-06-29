@@ -10,9 +10,11 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [notif, setNotif] = useState({ show: false, msg: '' });
+  const [notif, setNotif] = useState({ show: false, msg: '', type: 'success' });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,19 +32,19 @@ export default function Auth() {
       if (ok && data.success) {
         if (isLogin) {
           setSession({ token: data.data.token, user: data.data.user });
-          setNotif({ show: true, msg: 'Login berhasil!' });
-          setTimeout(() => navigate('/'), 900);
+          showNotif('Login berhasil!');
+          setTimeout(() => navigate('/'), 800);
         } else {
-          setNotif({ show: true, msg: 'Registrasi berhasil! Silakan login.' });
+          showNotif('Registrasi berhasil! Silakan login.');
           setIsLogin(true);
           setPassword('');
         }
       } else {
         const errMsg = data?.errors?.[0]?.message || data?.message || 'Terjadi kesalahan';
-        setNotif({ show: true, msg: errMsg });
+        showNotif(errMsg, 'error');
       }
     } catch {
-      setNotif({ show: true, msg: 'Gagal menghubungi server' });
+      showNotif('Gagal menghubungi server', 'error');
     } finally {
       setLoading(false);
     }
@@ -50,7 +52,7 @@ export default function Auth() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center -mt-6 sm:-mt-10 relative px-2">
-      <Notification message={notif.msg} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '' })} />
+      <Notification message={notif.msg} type={notif.type} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '', type: 'success' })} />
 
       <div className="absolute inset-0 z-0">
         <img
@@ -72,10 +74,10 @@ export default function Auth() {
         </div>
 
         <div className="flex gap-4 mb-8">
-          <button onClick={() => setIsLogin(true)} className={`flex-1 pb-2 text-sm font-medium transition-all ${isLogin ? 'border-b-2 border-luxury-gold text-luxury-gold' : 'border-b-2 border-transparent text-gray-400 hover:text-gray-600'}`}>
+          <button onClick={() => setIsLogin(true)} className={`flex-1 pb-2 text-sm font-medium transition-all ${isLogin ? 'border-b-2 border-luxury-gold text-luxury-gold' : 'border-b-2 border-transparent text-gray-400'}`}>
             Sign In
           </button>
-          <button onClick={() => setIsLogin(false)} className={`flex-1 pb-2 text-sm font-medium transition-all ${!isLogin ? 'border-b-2 border-luxury-gold text-luxury-gold' : 'border-b-2 border-transparent text-gray-400 hover:text-gray-600'}`}>
+          <button onClick={() => setIsLogin(false)} className={`flex-1 pb-2 text-sm font-medium transition-all ${!isLogin ? 'border-b-2 border-luxury-gold text-luxury-gold' : 'border-b-2 border-transparent text-gray-400'}`}>
             Sign Up
           </button>
         </div>
