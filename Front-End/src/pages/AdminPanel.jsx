@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { ShieldCheck, Users, CalendarClock, CircleCheckBig, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ShieldCheck, Users, CalendarClock, Search } from 'lucide-react';
 import Notification from '../components/Notification';
 import { apiFetch } from '../lib/api';
+import { getSocket } from '../lib/realtime';
 
 export default function AdminPanel() {
   const [users, setUsers] = useState([]);
@@ -13,11 +14,10 @@ export default function AdminPanel() {
   const [loadingBookings, setLoadingBookings] = useState(false);
 
   const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
-
-  useEffect(() => {
-    fetchUsers();
-    fetchBookings();
-  }, []);
+  const apiHost = useMemo(
+    () => (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace('/api', ''),
+    []
+  );
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -36,6 +36,20 @@ export default function AdminPanel() {
     setLoadingBookings(false);
   };
 
+  useEffect(() => {
+    fetchUsers();
+    fetchBookings();
+
+    const socket = getSocket();
+    const onBookingChanged = () => {
+      // smooth refresh data list only (tanpa full page refresh)
+      fetchBookings();
+    };
+
+    socket.on('booking:changed', onBookingChanged);
+    return () => socket.off('booking:changed', onBookingChanged);
+  }, []);
+
   const updateBookingStatus = async (id, status) => {
     const { ok, data } = await apiFetch(`/bookings/${id}/status`, {
       method: 'PUT',
@@ -44,7 +58,7 @@ export default function AdminPanel() {
 
     if (ok && data.success) {
       showNotif(`Status booking #${id} diubah ke ${status}`);
-      fetchBookings();
+      // tidak perlu fetch manual, RTC akan update otomatis
     } else {
       showNotif(data?.message || 'Gagal update status booking', 'error');
     }
@@ -52,14 +66,19 @@ export default function AdminPanel() {
 
   return (
     <div className="space-y-8">
-      <Notification message={notif.msg} type={notif.type} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '', type: 'success' })} />
+      <Notification
+        message={notif.msg}
+        type={notif.type}
+        isVisible={notif.show}
+        onClose={() => setNotif({ show: false, msg: '', type: 'success' })}
+      />
 
       <div className="bg-gradient-to-r from-gray-900 to-black text-white rounded-3xl p-6 sm:p-8">
         <h1 className="text-2xl sm:text-3xl font-serif font-bold flex items-center gap-2">
           <ShieldCheck className="w-7 h-7 text-luxury-gold" /> Admin & Kasir Panel
         </h1>
         <p className="text-gray-300 mt-2 text-sm sm:text-base">
-          Kelola user, pantau booking, dan update status pemesanan.
+          Kelola user dan status booking real-time.
         </p>
       </div>
 
@@ -99,16 +118,10 @@ export default function AdminPanel() {
                     <td className="py-3">{u.id}</td>
                     <td>{u.name}</td>
                     <td>{u.email}</td>
-                    <td>
-                      <span className="px-2 py-1 rounded-lg text-xs bg-gray-100 dark:bg-gray-900">
-                        {u.role}
-                      </span>
-                    </td>
+                    <td><span className="px-2 py-1 rounded-lg text-xs bg-gray-100 dark:bg-gray-900">{u.role}</span></td>
                   </tr>
                 ))}
-                {users.length === 0 && (
-                  <tr><td colSpan={4} className="py-6 text-gray-500 text-center">Tidak ada data user</td></tr>
-                )}
+                {users.length === 0 && <tr><td colSpan={4} className="py-6 text-gray-500 text-center">Tidak ada data user</td></tr>}
               </tbody>
             </table>
           </div>
@@ -143,6 +156,19 @@ export default function AdminPanel() {
                   <p className="font-semibold">Booking #{b.id} - {b.field_name}</p>
                   <p className="text-sm text-gray-500">{b.user_name} • {b.booking_date} • {b.time_slot}</p>
                   <p className="text-sm font-medium mt-1">Rp {Number(b.total_price).toLocaleString()}</p>
+
+                  {b.payment_proof ? (
+                    <a
+                      href={`${apiHost}${b.payment_proof}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block mt-2 text-xs px-3 py-1 rounded-lg bg-slate-700 text-white font-semibold"
+                    >
+                      Lihat Bukti Pembayaran
+                    </a>
+                  ) : (
+                    <p className="text-xs mt-2 text-gray-500">Belum ada bukti pembayaran</p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
@@ -154,9 +180,9 @@ export default function AdminPanel() {
 
                   <button
                     onClick={() => updateBookingStatus(b.id, 'Success')}
-                    className="text-xs px-3 py-2 rounded-lg bg-emerald-600 text-white font-semibold flex items-center gap-1"
+                    className="text-xs px-3 py-2 rounded-lg bg-emerald-600 text-white font-semibold"
                   >
-                    <CircleCheckBig className="w-3 h-3" /> Success
+                    Success
                   </button>
 
                   <button

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { MessageCircle, Users, Flame, MapPin, Clock, Trash2, PlusCircle } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { MessageCircle, Users, Flame, MapPin, Clock, Trash2, PlusCircle, Send, X } from 'lucide-react';
 import Notification from '../components/Notification';
 import { apiFetch, getCurrentUser } from '../lib/api';
+import { getSocket, joinMatchmakingChatRoom } from '../lib/realtime';
 
 export default function Matchmaking() {
   const [matches, setMatches] = useState([]);
@@ -17,13 +18,74 @@ export default function Matchmaking() {
     note: ''
   });
 
+  // chat states
+  const [activeChat, setActiveChat] = useState(null); // { id, title }
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const chatEndRef = useRef(null);
+
   const currentUser = getCurrentUser();
   const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
+
+  const activeChatId = useMemo(() => activeChat?.id || null, [activeChat]);
 
   useEffect(() => {
     fetchMatchmakings();
     fetchFields();
   }, []);
+
+  // RTC untuk list matchmaking (create/update/delete)
+  useEffect(() => {
+    const socket = getSocket();
+    const onChanged = () => {
+      fetchMatchmakings();
+    };
+
+    socket.on('matchmaking:changed', onChanged);
+    return () => socket.off('matchmaking:changed', onChanged);
+  }, []);
+
+  // RTC khusus chat room aktif (dengan penanganan deduplikasi & penggantian bubble optimistik)
+  useEffect(() => {
+    if (!activeChatId) return;
+
+    const socket = getSocket();
+    joinMatchmakingChatRoom(activeChatId);
+
+    const onNewMsg = (msg) => {
+      if (Number(msg?.matchmaking_id) !== Number(activeChatId)) return;
+
+      setChatMessages((prev) => {
+        // 1) Kalau ID server aslinya sudah ada di state, lewati (hindari duplikat)
+        if (prev.some((m) => String(m.id) === String(msg.id))) return prev;
+
+        // 2) Jika ini merupakan ack/broadcast dari pesan sendiri, ganti bubble sementara (tmp)
+        const optimisticIndex = prev.findIndex(
+          (m) =>
+            String(m.id).startsWith('tmp-') &&
+            Number(m.sender_id) === Number(msg.sender_id) &&
+            String(m.message).trim() === String(msg.message).trim()
+        );
+
+        if (optimisticIndex !== -1) {
+          const next = [...prev];
+          next[optimisticIndex] = msg; // ganti data sementara menjadi data riil dari server
+          return next;
+        }
+
+        // 3) Pesan baru dari orang lain
+        return [...prev, msg];
+      });
+    };
+
+    socket.on('matchmaking:message:new', onNewMsg);
+    return () => socket.off('matchmaking:message:new', onNewMsg);
+  }, [activeChatId]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   const fetchFields = async () => {
     const { ok, data } = await apiFetch('/fields?page=1&limit=100');
@@ -37,11 +99,73 @@ export default function Matchmaking() {
     setLoading(false);
   };
 
+  const openChat = async (match) => {
+    if (!currentUser) {
+      showNotif('Silakan login terlebih dahulu', 'error');
+      return;
+    }
+
+    setActiveChat({
+      id: match.id,
+      title: `${match.field_name || `Lapangan ${match.field_id}`} • ${match.time_schedule}`
+    });
+
+    setChatLoading(true);
+    const { ok, data } = await apiFetch(`/matchmakings/${match.id}/messages?page=1&limit=100`);
+    if (ok && data.success) {
+      setChatMessages(data.data || []);
+    } else {
+      setChatMessages([]);
+      showNotif(data?.message || 'Gagal memuat chat', 'error');
+    }
+    setChatLoading(false);
+  };
+
+  const closeChat = () => {
+    setActiveChat(null);
+    setChatMessages([]);
+    setChatInput('');
+  };
+
+  const sendChat = async (e) => {
+    e.preventDefault();
+    if (!activeChatId) return;
+    const message = chatInput.trim();
+    if (!message) return;
+
+    // Membuat UI optimistik sementara agar chat langsung muncul tanpa delay api
+    const tempId = `tmp-${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      matchmaking_id: activeChatId,
+      sender_id: currentUser?.id,
+      sender_name: currentUser?.name || 'Anda',
+      message,
+      created_at: new Date().toISOString()
+    };
+
+    setChatMessages((prev) => [...prev, optimistic]);
+    setChatInput('');
+
+    const { ok, data } = await apiFetch(`/matchmakings/${activeChatId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message })
+    });
+
+    if (!ok || !data?.success) {
+      // Hapus kembali bubble sementara jika API gagal mengirimkan data
+      setChatMessages((prev) => prev.filter((m) => String(m.id) !== tempId));
+      showNotif(data?.message || 'Gagal mengirim pesan', 'error');
+    }
+    // Catatan: tidak melakukan append data secara manual di sini, 
+    // karena sinkronisasi ID rill ditangani penuh oleh event socket di atas.
+  };
+
   const handleDeleteMatchmaking = async (id) => {
     const { ok, data } = await apiFetch(`/matchmakings/${id}`, { method: 'DELETE' });
     if (ok && data.success) {
       showNotif('Postingan berhasil dihapus');
-      fetchMatchmakings();
+      if (Number(activeChatId) === Number(id)) closeChat();
     } else {
       showNotif(data?.message || 'Gagal menghapus postingan', 'error');
     }
@@ -72,7 +196,6 @@ export default function Matchmaking() {
       showNotif('Ajakan mabar berhasil diposting!');
       setForm({ field_id: '', skill_level: '', looking_for: 1, time_schedule: '', note: '' });
       setShowCreateForm(false);
-      fetchMatchmakings();
     } else {
       showNotif(data?.errors?.[0]?.message || data?.message || 'Gagal memposting mabar', 'error');
     }
@@ -87,7 +210,7 @@ export default function Matchmaking() {
           <h1 className="text-2xl sm:text-3xl font-serif font-bold flex items-center gap-3">
             <Flame className="text-luxury-gold w-7 h-7 sm:w-8 sm:h-8" /> Mading Matchmaking
           </h1>
-          <p className="text-gray-400 mt-2">Kekurangan pemain? Temukan skuadmu di sini.</p>
+          <p className="text-gray-400 mt-2">Kekurangan pemain? Temukan skuadmu di sini (Realtime Chat Aktif).</p>
         </div>
 
         <button
@@ -184,7 +307,6 @@ export default function Matchmaking() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {matches.map(match => (
             <div key={match.id} className="group relative bg-white dark:bg-luxury-cardDark border border-gray-200 dark:border-gray-800 rounded-3xl p-6 hover:-translate-y-1 hover:shadow-2xl transition-all">
-
               {(match.user_id === currentUser?.id || currentUser?.role === 'admin') && (
                 <button onClick={() => handleDeleteMatchmaking(match.id)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition z-10">
                   <Trash2 className="w-5 h-5" />
@@ -216,13 +338,73 @@ export default function Matchmaking() {
               </div>
 
               <button
-                onClick={() => showNotif('Fitur chat tim akan segera hadir 🚀')}
+                onClick={() => openChat(match)}
                 className="w-full py-3 bg-gray-100 dark:bg-gray-900 hover:bg-black dark:hover:bg-white text-gray-900 dark:text-gray-100 hover:text-white dark:hover:text-black rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
               >
-                <MessageCircle className="w-4 h-4" /> Join Skuad
+                <MessageCircle className="w-4 h-4" /> Join Skuad (Live Chat)
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal Chat */}
+      {activeChat && (
+        <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-6">
+          <div className="w-full max-w-2xl bg-white dark:bg-luxury-cardDark rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold">Team Chat</h3>
+                <p className="text-xs text-gray-500">{activeChat.title}</p>
+              </div>
+              <button onClick={closeChat} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="h-[50vh] sm:h-[55vh] overflow-y-auto p-4 space-y-3 bg-gray-50/60 dark:bg-gray-950/20">
+              {chatLoading ? (
+                <p className="text-sm text-gray-500">Memuat chat...</p>
+              ) : chatMessages.length === 0 ? (
+                <p className="text-sm text-gray-500">Belum ada pesan. Jadilah yang pertama menyapa tim 👋</p>
+              ) : (
+                chatMessages.map((m) => {
+                  const mine = Number(m.sender_id) === Number(currentUser?.id);
+                  return (
+                    <div key={`${m.id}-${m.created_at || ''}`} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-3 py-2 border ${
+                        mine
+                          ? 'bg-black text-white border-black'
+                          : 'bg-white dark:bg-luxury-cardDark border-gray-200 dark:border-gray-700'
+                      }`}>
+                        <p className={`text-[11px] mb-1 ${mine ? 'text-white/80' : 'text-gray-500'}`}>
+                          {mine ? 'Anda' : m.sender_name}
+                        </p>
+                        <p className="text-sm whitespace-pre-wrap break-words">{m.message}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            <form onSubmit={sendChat} className="p-3 border-t border-gray-200 dark:border-gray-800 flex items-center gap-2">
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Tulis pesan ke tim..."
+                className="flex-1 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm outline-none focus:ring-2 focus:ring-luxury-gold"
+                maxLength={1000}
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl bg-black dark:bg-white text-white dark:text-black font-bold flex items-center gap-2"
+              >
+                <Send className="w-4 h-4" /> Kirim
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>

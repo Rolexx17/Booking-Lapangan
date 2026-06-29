@@ -1,5 +1,4 @@
-// Controller untuk Fitur Sosial, Matchmaking, dan Ulasan
-// Versi UAS Terintegrasi: ownership, pagination/filter, auth-aware operations & robust validations
+// REPLACE FILE PENUH - fokus fitur chat matchmaking + RTC, fitur lama tetap dipertahankan
 
 import db from '../config/db.js';
 import BaseController from '../utils/BaseController.js';
@@ -10,7 +9,6 @@ class SocialController extends BaseController {
     super('Social');
   }
 
-  // Ambil daftar matchmaking dengan pagination + filter
   getMatchmakings = async (req, res, next) => {
     try {
       const page = Number(req.query.page) || 1;
@@ -66,13 +64,11 @@ class SocialController extends BaseController {
     }
   };
 
-  // Buat post matchmaking (user login)
   createMatchmaking = async (req, res, next) => {
     try {
       const user_id = req.user.id;
       const { field_id, skill_level, looking_for, time_schedule, note } = req.body;
 
-      // Validasi input wajib dari kode kedua
       if (!field_id || !skill_level || !looking_for || !time_schedule) {
         return next(new AppError('Data matchmaking harus diisi lengkap', 400));
       }
@@ -82,13 +78,16 @@ class SocialController extends BaseController {
         [user_id, field_id, skill_level, looking_for, time_schedule, note || null]
       );
 
+      if (req.io) {
+        req.io.emit('matchmaking:changed', { action: 'created', id: result.insertId });
+      }
+
       this.sendSuccess(res, 201, 'Ajakan mabar diposting', { id: result.insertId });
     } catch (error) {
       next(error);
     }
   };
 
-  // Update matchmaking: hanya owner atau admin
   updateMatchmaking = async (req, res, next) => {
     try {
       const { skill_level, looking_for, time_schedule, note } = req.body;
@@ -105,13 +104,16 @@ class SocialController extends BaseController {
         [skill_level, looking_for, time_schedule, note || null, req.params.id]
       );
 
+      if (req.io) {
+        req.io.emit('matchmaking:changed', { action: 'updated', id: Number(req.params.id) });
+      }
+
       this.sendSuccess(res, 200, 'Posting mabar berhasil diupdate', { id: Number(req.params.id) });
     } catch (error) {
       next(error);
     }
   };
 
-  // Hapus matchmaking: hanya owner atau admin
   deleteMatchmaking = async (req, res, next) => {
     try {
       const [found] = await db.query('SELECT user_id FROM matchmakings WHERE id = ? LIMIT 1', [req.params.id]);
@@ -119,18 +121,112 @@ class SocialController extends BaseController {
 
       const isOwner = Number(found[0].user_id) === Number(req.user.id);
       const isAdmin = req.user.role === 'admin';
-      if (!isOwner && !isAdmin) {
-        return next(new AppError('Tidak memiliki akses menghapus posting ini', 403));
-      }
+      if (!isOwner && !isAdmin) return next(new AppError('Tidak memiliki akses menghapus posting ini', 403));
 
       await db.query('DELETE FROM matchmakings WHERE id = ?', [req.params.id]);
+
+      if (req.io) {
+        req.io.emit('matchmaking:changed', { action: 'deleted', id: Number(req.params.id) });
+      }
+
       this.sendSuccess(res, 200, 'Posting mabar berhasil dihapus');
     } catch (error) {
       next(error);
     }
   };
 
-  // Ambil review by field dengan pagination
+  // =========================
+  // MATCHMAKING CHAT (BARU)
+  // =========================
+
+  // Ambil chat per matchmaking
+  getMatchmakingMessages = async (req, res, next) => {
+    try {
+      const matchmakingId = Number(req.params.id);
+      if (!matchmakingId) return next(new AppError('ID matchmaking tidak valid', 400));
+
+      // pastikan matchmaking ada
+      const [mk] = await db.query('SELECT id FROM matchmakings WHERE id = ? LIMIT 1', [matchmakingId]);
+      if (mk.length === 0) return next(new AppError('Posting mabar tidak ditemukan', 404));
+
+      const page = Math.max(Number(req.query.page) || 1, 1);
+      const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
+      const offset = (page - 1) * limit;
+
+      const [rows] = await db.query(
+        `SELECT mm.id, mm.matchmaking_id, mm.sender_id, u.name as sender_name, mm.message, mm.created_at
+         FROM matchmaking_messages mm
+         JOIN users u ON mm.sender_id = u.id
+         WHERE mm.matchmaking_id = ?
+         ORDER BY mm.id DESC
+         LIMIT ? OFFSET ?`,
+        [matchmakingId, limit, offset]
+      );
+
+      const [countRows] = await db.query(
+        'SELECT COUNT(*) as total FROM matchmaking_messages WHERE matchmaking_id = ?',
+        [matchmakingId]
+      );
+
+      // balikkan ascending agar enak render chat
+      const messagesAsc = rows.reverse();
+
+      this.sendSuccess(res, 200, 'Chat matchmaking berhasil diambil', messagesAsc, {
+        page,
+        limit,
+        totalItems: countRows[0].total,
+        totalPages: Math.ceil(countRows[0].total / limit)
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // Kirim pesan chat
+  sendMatchmakingMessage = async (req, res, next) => {
+    try {
+      const matchmakingId = Number(req.params.id);
+      const senderId = Number(req.user.id);
+      const message = String(req.body?.message || '').trim();
+
+      if (!matchmakingId) return next(new AppError('ID matchmaking tidak valid', 400));
+      if (!message) return next(new AppError('Pesan tidak boleh kosong', 400));
+      if (message.length > 1000) return next(new AppError('Pesan terlalu panjang (maks 1000 karakter)', 400));
+
+      // pastikan matchmaking ada
+      const [mk] = await db.query('SELECT id FROM matchmakings WHERE id = ? LIMIT 1', [matchmakingId]);
+      if (mk.length === 0) return next(new AppError('Posting mabar tidak ditemukan', 404));
+
+      const [result] = await db.query(
+        'INSERT INTO matchmaking_messages (matchmaking_id, sender_id, message) VALUES (?, ?, ?)',
+        [matchmakingId, senderId, message]
+      );
+
+      const [newRows] = await db.query(
+        `SELECT mm.id, mm.matchmaking_id, mm.sender_id, u.name as sender_name, mm.message, mm.created_at
+         FROM matchmaking_messages mm
+         JOIN users u ON mm.sender_id = u.id
+         WHERE mm.id = ? LIMIT 1`,
+        [result.insertId]
+      );
+
+      const newMsg = newRows[0];
+
+      // emit realtime ke room matchmaking tersebut
+      if (req.io) {
+        req.io.to(`matchmaking:${matchmakingId}`).emit('matchmaking:message:new', newMsg);
+      }
+
+      this.sendSuccess(res, 201, 'Pesan berhasil dikirim', newMsg);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // =========================
+  // REVIEWS
+  // =========================
+
   getReviewsByField = async (req, res, next) => {
     try {
       const page = Number(req.query.page) || 1;
@@ -163,19 +259,14 @@ class SocialController extends BaseController {
     }
   };
 
-  // Buat review (user login)
   createReview = async (req, res, next) => {
     try {
       const user_id = req.user.id;
       const field_id = Number(req.params.fieldId);
       const { rating, comment } = req.body;
 
-      // Validasi kelengkapan data dari kode kedua
-      if (!rating || !comment) {
-        return next(new AppError('Data ulasan (rating, comment) harus diisi', 400));
-      }
+      if (!rating || !comment) return next(new AppError('Data ulasan (rating, comment) harus diisi', 400));
 
-      // Validasi ketersediaan field dari kode pertama
       const [fieldRows] = await db.query('SELECT id FROM fields WHERE id = ?', [field_id]);
       if (fieldRows.length === 0) return next(new AppError('Lapangan tidak ditemukan', 404));
 
@@ -184,7 +275,6 @@ class SocialController extends BaseController {
         [user_id, field_id, rating, comment]
       );
 
-      // Update rating rata-rata fields
       await db.query(
         'UPDATE fields SET rating = (SELECT IFNULL(AVG(rating), 0) FROM reviews WHERE field_id = ?) WHERE id = ?',
         [field_id, field_id]
@@ -201,7 +291,6 @@ class SocialController extends BaseController {
     }
   };
 
-  // Update review: owner/admin
   updateReview = async (req, res, next) => {
     try {
       const { rating, comment } = req.body;
@@ -227,7 +316,6 @@ class SocialController extends BaseController {
     }
   };
 
-  // Hapus review: owner/admin
   deleteReview = async (req, res, next) => {
     try {
       const [reviewData] = await db.query('SELECT user_id, field_id FROM reviews WHERE id = ?', [req.params.id]);

@@ -17,7 +17,6 @@ export function getCurrentUser() {
 export function setSession({ token, user }) {
   if (token) localStorage.setItem('token', token);
   if (user) localStorage.setItem('user', JSON.stringify(user));
-  // trigger update tab yang sama
   window.dispatchEvent(new Event('storage'));
 }
 
@@ -34,8 +33,7 @@ export async function apiFetch(path, options = {}) {
     ...(options.headers || {})
   };
 
-  // set content-type json jika body bukan FormData
-  if (!(options.body instanceof FormData)) {
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
 

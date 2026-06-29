@@ -13,20 +13,28 @@ export default function BookingForm() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const { field, selectedSlot } = location.state || {};
+  const { field, selectedSlot, selectedDate } = location.state || {};
 
   const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
 
-  const handleDragOver = (e) => e.preventDefault();
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0]);
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile.type.startsWith('image/')) {
+        setFile(droppedFile);
+      } else {
+        showNotif('Hanya file gambar yang diperbolehkan', 'error');
+      }
     }
   };
 
   const handleFinish = async () => {
-    if (!field || !selectedSlot) return;
+    if (!field || !selectedSlot || !selectedDate) return;
 
     const user = getCurrentUser();
     if (!user) {
@@ -37,26 +45,43 @@ export default function BookingForm() {
 
     setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const payload = {
-        field_id: field.id,
-        booking_date: today,
-        time_slot: selectedSlot,
-        total_price: field.price,
-        payment_proof: file?.name || null
-      };
-
-      const { ok, data } = await apiFetch('/bookings', {
+      // 1) create booking
+      const create = await apiFetch('/bookings', {
         method: 'POST',
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          field_id: field.id,
+          booking_date: selectedDate,
+          time_slot: selectedSlot,
+          total_price: Number(field.price),
+          payment_proof: null
+        })
       });
 
-      if (ok && data.success) {
-        showNotif('Pembayaran berhasil diunggah! Menunggu konfirmasi admin.');
-        setTimeout(() => navigate('/dashboard'), 1200);
-      } else {
-        showNotif(data?.errors?.[0]?.message || data?.message || 'Gagal membuat pesanan', 'error');
+      if (!create.ok || !create.data?.success) {
+        showNotif(create.data?.errors?.[0]?.message || create.data?.message || 'Gagal membuat booking', 'error');
+        return;
       }
+
+      const bookingId = create.data.data.id;
+
+      // 2) upload bukti (jika ada file)
+      if (file) {
+        const formData = new FormData();
+        formData.append('payment_proof', file);
+
+        const up = await apiFetch(`/bookings/${bookingId}/payment-proof`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!up.ok || !up.data?.success) {
+          showNotif(up.data?.message || 'Booking dibuat, tapi upload bukti gagal', 'error');
+          return;
+        }
+      }
+
+      showNotif('Booking berhasil. Update status realtime aktif.');
+      setTimeout(() => navigate('/dashboard'), 1000);
     } catch {
       showNotif('Terjadi kesalahan menghubungi server', 'error');
     } finally {
@@ -64,12 +89,13 @@ export default function BookingForm() {
     }
   };
 
-  if (!field) return <div className="text-center py-20">Data pemesanan tidak valid. Silakan kembali ke halaman lapangan.</div>;
+  if (!field) return <div className="text-center py-20">Data pemesanan tidak valid. Silakan kembali.</div>;
 
   return (
     <div className="max-w-3xl mx-auto">
       <Notification message={notif.msg} type={notif.type} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '', type: 'success' })} />
 
+      {/* Stepper Progress */}
       <div className="flex justify-between items-center mb-12 relative">
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-gray-200 dark:bg-gray-800 -z-10 rounded-full" />
         <div
@@ -88,13 +114,15 @@ export default function BookingForm() {
         ))}
       </div>
 
+      {/* Form Card Content */}
       <div className="bg-white dark:bg-luxury-cardDark rounded-3xl p-6 sm:p-8 border border-gray-200 dark:border-gray-800 shadow-xl">
         {step === 1 && (
           <div className="space-y-6">
             <h2 className="text-2xl font-serif font-bold">Ringkasan Pesanan</h2>
             <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800">
               <div className="flex justify-between mb-4"><span className="text-gray-500">Lapangan</span> <span className="font-bold">{field.name}</span></div>
-              <div className="flex justify-between mb-4"><span className="text-gray-500">Jadwal</span> <span className="font-bold">Hari ini, {selectedSlot}</span></div>
+              <div className="flex justify-between mb-4"><span className="text-gray-500">Tanggal</span> <span className="font-bold">{selectedDate}</span></div>
+              <div className="flex justify-between mb-4"><span className="text-gray-500">Jadwal</span> <span className="font-bold">{selectedSlot}</span></div>
               <div className="border-t border-gray-200 dark:border-gray-700 pt-4 flex justify-between text-lg">
                 <span className="text-gray-500">Total Pembayaran</span> <span className="font-bold text-luxury-gold">Rp {Number(field.price).toLocaleString()}</span>
               </div>

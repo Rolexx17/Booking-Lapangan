@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, Settings, Clock, MapPin, XCircle, Trash2, Edit2, CheckCircle2 } from 'lucide-react';
 import Notification from '../components/Notification';
 import { apiFetch, getCurrentUser, setSession } from '../lib/api';
+import { getSocket } from '../lib/realtime';
 
 export default function Dashboard() {
   const [historyData, setHistoryData] = useState([]);
@@ -12,12 +13,6 @@ export default function Dashboard() {
 
   const currentUser = getCurrentUser();
   const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
-
-  useEffect(() => {
-    if (!currentUser) return;
-    fetchProfile();
-    fetchBookings();
-  }, []);
 
   const fetchProfile = async () => {
     const { ok, data } = await apiFetch('/auth/me');
@@ -30,6 +25,22 @@ export default function Dashboard() {
     if (ok && data.success && data.data) setHistoryData(data.data);
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchProfile();
+    fetchBookings();
+
+    const socket = getSocket();
+    const onBookingChanged = () => fetchBookings();
+
+    // Mendengarkan event real-time dari server untuk pembaruan data otomatis
+    socket.on('booking:changed', onBookingChanged);
+    
+    return () => {
+      socket.off('booking:changed', onBookingChanged);
+    };
+  }, []);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -58,7 +69,7 @@ export default function Dashboard() {
 
     if (ok && data.success) {
       showNotif('Booking berhasil dibatalkan');
-      fetchBookings();
+      // fetchBookings() tidak perlu dipanggil manual karena di-handle oleh socket 'booking:changed'
     } else {
       showNotif(data?.message || 'Gagal membatalkan booking', 'error');
     }
@@ -68,7 +79,7 @@ export default function Dashboard() {
     const { ok, data } = await apiFetch(`/bookings/${id}`, { method: 'DELETE' });
     if (ok && data.success) {
       showNotif('Riwayat berhasil dihapus');
-      fetchBookings();
+      // fetchBookings() tidak perlu dipanggil manual karena di-handle oleh socket 'booking:changed'
     } else {
       showNotif(data?.message || 'Gagal menghapus riwayat', 'error');
     }
@@ -76,8 +87,14 @@ export default function Dashboard() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      <Notification message={notif.msg} type={notif.type} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '', type: 'success' })} />
+      <Notification 
+        message={notif.msg} 
+        type={notif.type} 
+        isVisible={notif.show} 
+        onClose={() => setNotif({ show: false, msg: '', type: 'success' })} 
+      />
 
+      {/* Bagian Kiri: Profil & Navigasi */}
       <div className="lg:col-span-1 space-y-6">
         <div className="bg-white dark:bg-luxury-cardDark border border-gray-200 dark:border-gray-800 rounded-3xl p-8 text-center shadow-lg relative">
           <button onClick={() => setIsEditing(!isEditing)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-luxury-gold transition">
@@ -130,6 +147,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Bagian Kanan: List Riwayat Pemesanan */}
       <div className="lg:col-span-3 space-y-6">
         <h2 className="text-3xl font-serif font-bold border-b border-gray-200 dark:border-gray-800 pb-4">Riwayat Pemesanan</h2>
 
@@ -155,7 +173,7 @@ export default function Dashboard() {
                     <span className="font-bold text-lg">Rp {Number(item.total_price).toLocaleString()}</span>
                     <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${
                       item.status === 'Pending' ? 'bg-yellow-50 text-yellow-600 border-yellow-200' :
-                      item.status === 'Success' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                      item.status === 'Success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                       'bg-red-50 text-red-600 border-red-200'
                     }`}>
                       {item.status}
@@ -163,12 +181,12 @@ export default function Dashboard() {
                   </div>
                   <div className="flex gap-2">
                     {item.status === 'Pending' && (
-                      <button onClick={() => handleCancelBooking(item.id)} className="text-xs flex items-center gap-1 text-red-500 hover:text-red-700 bg-red-50 px-3 py-1 rounded-lg">
+                      <button onClick={() => handleCancelBooking(item.id)} className="text-xs flex items-center gap-1 text-red-500 hover:text-red-700 bg-red-50 px-3 py-1 rounded-lg transition">
                         <XCircle className="w-3 h-3" /> Batalkan
                       </button>
                     )}
                     {(item.status === 'Success' || item.status === 'Cancelled') && (
-                      <button onClick={() => handleDeleteBooking(item.id)} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-700 bg-gray-100 px-3 py-1 rounded-lg">
+                      <button onClick={() => handleDeleteBooking(item.id)} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-700 bg-gray-100 px-3 py-1 rounded-lg transition">
                         <Trash2 className="w-3 h-3" /> Hapus Riwayat
                       </button>
                     )}

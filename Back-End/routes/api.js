@@ -1,4 +1,4 @@
-// Konfigurasi Rute API (API Routes)
+// REPLACE FILE PENUH - hanya tambah route chat matchmaking, route lain tetap
 
 import express from 'express';
 import fieldController from '../controllers/fieldController.js';
@@ -8,6 +8,7 @@ import socialController from '../controllers/socialController.js';
 
 import { validate } from '../middlewares/validate.js';
 import { requireAuth, authorizeRoles, authorizeSelfOrRoles } from '../middlewares/auth.js';
+import { uploadPaymentProof } from '../middlewares/uploadPaymentProof.js';
 
 const router = express.Router();
 
@@ -15,7 +16,6 @@ const router = express.Router();
    AUTH
 ========================= */
 
-// Register customer umum
 router.post(
   '/auth/register',
   validate([
@@ -32,7 +32,6 @@ router.post(
   authController.register
 );
 
-// Login
 router.post(
   '/auth/login',
   validate([
@@ -48,10 +47,8 @@ router.post(
   authController.login
 );
 
-// Profil token aktif
 router.get('/auth/me', requireAuth, authController.me);
 
-// Register admin/kasir khusus admin
 router.post(
   '/auth/register-staff',
   requireAuth,
@@ -72,16 +69,11 @@ router.post(
 );
 
 /* =========================
-   USERS (Admin/Kasir/Owner)
+   USERS
 ========================= */
 
-// Hanya admin dan kasir bisa lihat daftar user
 router.get('/users', requireAuth, authorizeRoles('admin', 'kasir'), authController.getAllUsers);
-
-// Owner sendiri atau admin/kasir
 router.get('/users/:id', requireAuth, authorizeSelfOrRoles('id', 'admin', 'kasir'), authController.getUserProfile);
-
-// Owner sendiri atau admin
 router.put(
   '/users/:id',
   requireAuth,
@@ -98,12 +90,10 @@ router.put(
   ]),
   authController.updateUserProfile
 );
-
-// Hanya admin boleh hapus user
 router.delete('/users/:id', requireAuth, authorizeRoles('admin'), authController.deleteUser);
 
 /* =========================
-   FIELDS (public read, staff write)
+   FIELDS
 ========================= */
 
 router.get('/fields', fieldController.getFields);
@@ -139,7 +129,6 @@ router.delete('/fields/:id', requireAuth, authorizeRoles('admin'), fieldControll
    BOOKINGS
 ========================= */
 
-// Customer membuat booking (harus login)
 router.post(
   '/bookings',
   requireAuth,
@@ -152,13 +141,10 @@ router.post(
   bookingController.createBooking
 );
 
-// Admin/kasir lihat semua booking + pagination/filter
 router.get('/bookings', requireAuth, authorizeRoles('admin', 'kasir'), bookingController.getAllBookings);
-
-// User login lihat booking miliknya
 router.get('/bookings/me', requireAuth, bookingController.getMyBookings);
+router.get('/fields/:fieldId/booked-slots', bookingController.getBookedSlots);
 
-// Update status booking (customer hanya cancel; admin/kasir bebas status valid)
 router.put(
   '/bookings/:id/status',
   requireAuth,
@@ -166,7 +152,21 @@ router.put(
   bookingController.updateBookingStatus
 );
 
-// Hapus booking (admin/kasir bebas, customer hanya miliknya non-pending)
+router.put(
+  '/bookings/:id/payment-status',
+  requireAuth,
+  authorizeRoles('admin', 'kasir'),
+  validate([{ field: 'payment_status', required: true, enum: ['Verified', 'Rejected'] }]),
+  bookingController.verifyPayment
+);
+
+router.post(
+  '/bookings/:id/payment-proof',
+  requireAuth,
+  uploadPaymentProof.single('payment_proof'),
+  bookingController.uploadPaymentProof
+);
+
 router.delete('/bookings/:id', requireAuth, bookingController.deleteBooking);
 
 /* =========================
@@ -189,6 +189,15 @@ router.post(
 
 router.put('/matchmakings/:id', requireAuth, socialController.updateMatchmaking);
 router.delete('/matchmakings/:id', requireAuth, socialController.deleteMatchmaking);
+
+// CHAT MATCHMAKING (BARU)
+router.get('/matchmakings/:id/messages', requireAuth, socialController.getMatchmakingMessages);
+router.post(
+  '/matchmakings/:id/messages',
+  requireAuth,
+  validate([{ field: 'message', required: true, type: 'string', minLength: 1 }]),
+  socialController.sendMatchmakingMessage
+);
 
 /* =========================
    REVIEWS
