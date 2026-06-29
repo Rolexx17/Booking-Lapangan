@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
+
 import Home from './pages/Home';
 import FieldDetail from './pages/FieldDetail';
 import Auth from './pages/Auth';
@@ -16,8 +18,22 @@ export default function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
             <Route path="field/:id" element={<FieldDetail />} />
-            <Route path="booking-form" element={<BookingForm />} />
-            <Route path="dashboard" element={<Dashboard />} />
+            <Route
+              path="booking-form"
+              element={
+                <ProtectedRoute>
+                  <BookingForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
             <Route path="matchmaking" element={<Matchmaking />} />
             <Route path="login" element={<Auth />} />
           </Route>

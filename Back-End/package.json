@@ -5,12 +5,21 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "test": "node -e \"console.log('No test yet')\"",
+    "seed:users": "node scripts/seedUsers.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.22.1",
+    "express-validator": "^7.3.2",
+    "helmet": "^8.2.0",
+    "http-errors": "^2.0.1",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.11.0",
     "mysql2": "^3.22.3"
   },
   "devDependencies": {

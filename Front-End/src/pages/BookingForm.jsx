@@ -2,13 +2,15 @@ import { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Check, UploadCloud, FileText } from 'lucide-react';
 import Notification from '../components/Notification';
+import { apiFetch, getCurrentUser } from '../lib/api';
 
 export default function BookingForm() {
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
-  const [showNotif, setShowNotif] = useState(false);
+  const [notif, setNotif] = useState({ show: false, msg: '' });
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
-  
+
   const location = useLocation();
   const navigate = useNavigate();
   const { field, selectedSlot } = location.state || {};
@@ -24,34 +26,38 @@ export default function BookingForm() {
   const handleFinish = async () => {
     if (!field || !selectedSlot) return;
 
+    const user = getCurrentUser();
+    if (!user) {
+      setNotif({ show: true, msg: 'Silakan login terlebih dahulu' });
+      setTimeout(() => navigate('/login'), 900);
+      return;
+    }
+
+    setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0]; // Format YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
       const payload = {
-        user_id: 1, // Dummy user_id
         field_id: field.id,
         booking_date: today,
         time_slot: selectedSlot,
         total_price: field.price
       };
 
-      const res = await fetch('http://localhost:5000/api/bookings', {
+      const { ok, data } = await apiFetch('/bookings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
 
-      if (data.success) {
-        setShowNotif(true);
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 2000);
+      if (ok && data.success) {
+        setNotif({ show: true, msg: 'Pembayaran berhasil diunggah! Menunggu konfirmasi admin.' });
+        setTimeout(() => navigate('/dashboard'), 1300);
       } else {
-        alert(data.message || 'Gagal membuat pesanan');
+        setNotif({ show: true, msg: data?.errors?.[0]?.message || data?.message || 'Gagal membuat pesanan' });
       }
-    } catch (error) {
-      console.error(error);
-      alert('Terjadi kesalahan menghubungi server');
+    } catch {
+      setNotif({ show: true, msg: 'Terjadi kesalahan menghubungi server' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -59,16 +65,17 @@ export default function BookingForm() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <Notification message="Pembayaran berhasil diunggah! Menunggu konfirmasi admin." isVisible={showNotif} onClose={() => setShowNotif(false)} />
-      
-      {/* Stepper Header */}
+      <Notification message={notif.msg} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '' })} />
+
       <div className="flex justify-between items-center mb-12 relative">
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-gray-200 dark:bg-gray-800 -z-10 rounded-full"></div>
-        <div className={`absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-luxury-gold -z-10 rounded-full transition-all duration-500`} style={{ width: step === 1 ? '0%' : step === 2 ? '50%' : '100%' }}></div>
-        
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-gray-200 dark:bg-gray-800 -z-10 rounded-full" />
+        <div
+          className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-luxury-gold -z-10 rounded-full transition-all duration-500"
+          style={{ width: step === 1 ? '0%' : step === 2 ? '50%' : '100%' }}
+        />
         {['Detail', 'Pembayaran', 'Selesai'].map((label, idx) => (
           <div key={idx} className="flex flex-col items-center gap-2">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 shadow-lg ${step > idx ? 'bg-luxury-gold text-white scale-110 shadow-luxury-gold/50' : 'bg-white text-gray-400 border border-gray-200 dark:bg-gray-800 dark:border-gray-700'}`}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 shadow-lg ${step > idx ? 'bg-luxury-gold text-white scale-110' : 'bg-gray-200 text-gray-500'}`}>
               {step > idx + 1 ? <Check className="w-5 h-5" /> : idx + 1}
             </div>
             <span className={`text-sm font-medium ${step >= idx + 1 ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>{label}</span>
@@ -76,10 +83,9 @@ export default function BookingForm() {
         ))}
       </div>
 
-      {/* Card Content */}
-      <div className="bg-white dark:bg-luxury-cardDark rounded-3xl p-8 border border-gray-200 dark:border-gray-800 shadow-xl transition-all">
+      <div className="bg-white dark:bg-luxury-cardDark rounded-3xl p-6 sm:p-8 border border-gray-200 dark:border-gray-800 shadow-xl">
         {step === 1 && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6">
             <h2 className="text-2xl font-serif font-bold">Ringkasan Pesanan</h2>
             <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800">
               <div className="flex justify-between mb-4"><span className="text-gray-500">Lapangan</span> <span className="font-bold">{field.name}</span></div>
@@ -88,43 +94,55 @@ export default function BookingForm() {
                 <span className="text-gray-500">Total Pembayaran</span> <span className="font-bold text-luxury-gold">Rp {Number(field.price).toLocaleString()}</span>
               </div>
             </div>
-            <button onClick={() => setStep(2)} className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+            <button onClick={() => setStep(2)} className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold hover:-translate-y-1 hover:shadow-xl transition-all">
               Lanjut ke Pembayaran
             </button>
           </div>
         )}
 
         {step === 2 && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6">
             <h2 className="text-2xl font-serif font-bold">Upload Bukti Transfer</h2>
-            <p className="text-sm text-gray-500 mb-4">Transfer ke BCA 123456789 a.n Lumina Arena sebesar <strong className="text-gray-900 dark:text-white">Rp {Number(field.price).toLocaleString()}</strong></p>
-            
-            <div 
-              onDragOver={handleDragOver} 
+            <p className="text-sm text-gray-500 mb-4">
+              Transfer ke BCA 123456789 a.n Lumina Arena sebesar <strong className="text-gray-900 dark:text-white">Rp {Number(field.price).toLocaleString()}</strong>
+            </p>
+
+            <div
+              onDragOver={handleDragOver}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current.click()}
-              className="border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-luxury-gold dark:hover:border-luxury-gold rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer transition-all group"
+              className="border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-luxury-gold rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer"
             >
               <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setFile(e.target.files[0])} accept="image/*" />
               {file ? (
                 <div className="flex flex-col items-center gap-2">
                   <FileText className="w-12 h-12 text-luxury-gold" />
-                  <p className="font-medium">{file.name}</p>
+                  <p className="font-medium text-center">{file.name}</p>
                   <p className="text-xs text-emerald-500 font-bold">File terpilih. Klik untuk ganti.</p>
                 </div>
               ) : (
                 <>
-                  <UploadCloud className="w-12 h-12 text-gray-400 group-hover:text-luxury-gold group-hover:-translate-y-1 transition-all mb-3" />
-                  <p className="font-medium text-gray-600 dark:text-gray-300">Drag & drop gambar ke sini</p>
+                  <UploadCloud className="w-12 h-12 text-gray-400 mb-3" />
+                  <p className="font-medium text-gray-600 dark:text-gray-300 text-center">Drag & drop gambar ke sini</p>
                   <p className="text-sm text-gray-400">atau klik untuk browse file</p>
                 </>
               )}
             </div>
 
             <div className="flex gap-4">
-              <button onClick={() => setStep(1)} className="px-6 py-4 rounded-xl border border-gray-200 dark:border-gray-700 font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">Kembali</button>
-              <button onClick={handleFinish} disabled={!file} className={`flex-1 py-4 rounded-xl font-bold transition-all duration-300 shadow-lg ${file ? 'bg-black dark:bg-white text-white dark:text-black hover:-translate-y-1' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'}`}>
-                Selesaikan Pembayaran
+              <button onClick={() => setStep(1)} className="px-6 py-4 rounded-xl border border-gray-200 dark:border-gray-700 font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+                Kembali
+              </button>
+              <button
+                onClick={handleFinish}
+                disabled={!file || loading}
+                className={`flex-1 py-4 rounded-xl font-bold transition-all duration-300 shadow-lg ${
+                  !file || loading
+                    ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                    : 'bg-black dark:bg-white text-white dark:text-black hover:-translate-y-1'
+                }`}
+              >
+                {loading ? 'Memproses...' : 'Selesaikan Pembayaran'}
               </button>
             </div>
           </div>
