@@ -25,10 +25,12 @@ export default function BookingForm() {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile.type.startsWith('image/')) {
+      const okType =
+        droppedFile.type.startsWith('image/') || droppedFile.type === 'application/pdf';
+      if (okType) {
         setFile(droppedFile);
       } else {
-        showNotif('Hanya file gambar yang diperbolehkan', 'error');
+        showNotif('File harus berupa gambar atau PDF', 'error');
       }
     }
   };
@@ -45,7 +47,6 @@ export default function BookingForm() {
 
     setLoading(true);
     try {
-      // 1) create booking
       const create = await apiFetch('/bookings', {
         method: 'POST',
         body: JSON.stringify({
@@ -64,7 +65,6 @@ export default function BookingForm() {
 
       const bookingId = create.data.data.id;
 
-      // 2) upload bukti (jika ada file)
       if (file) {
         const formData = new FormData();
         formData.append('payment_proof', file);
@@ -80,7 +80,7 @@ export default function BookingForm() {
         }
       }
 
-      showNotif('Booking berhasil. Update status realtime aktif.');
+      showNotif(file ? 'Booking & upload bukti berhasil.' : 'Booking berhasil dibuat (status: Unpaid).');
       setTimeout(() => navigate('/dashboard'), 1000);
     } catch {
       showNotif('Terjadi kesalahan menghubungi server', 'error');
@@ -95,7 +95,6 @@ export default function BookingForm() {
     <div className="max-w-3xl mx-auto">
       <Notification message={notif.msg} type={notif.type} isVisible={notif.show} onClose={() => setNotif({ show: false, msg: '', type: 'success' })} />
 
-      {/* Stepper Progress */}
       <div className="flex justify-between items-center mb-12 relative">
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-gray-200 dark:bg-gray-800 -z-10 rounded-full" />
         <div
@@ -114,7 +113,6 @@ export default function BookingForm() {
         ))}
       </div>
 
-      {/* Form Card Content */}
       <div className="bg-white dark:bg-luxury-cardDark rounded-3xl p-6 sm:p-8 border border-gray-200 dark:border-gray-800 shadow-xl">
         {step === 1 && (
           <div className="space-y-6">
@@ -135,9 +133,9 @@ export default function BookingForm() {
 
         {step === 2 && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-serif font-bold">Upload Bukti Transfer</h2>
+            <h2 className="text-2xl font-serif font-bold">Upload Bukti Transfer (Opsional)</h2>
             <p className="text-sm text-gray-500 mb-4">
-              Transfer ke BCA 123456789 a.n Lumina Arena sebesar <strong className="text-gray-900 dark:text-white">Rp {Number(field.price).toLocaleString()}</strong>
+              Kamu bisa upload sekarang atau nanti dari dashboard/admin akan verifikasi saat bukti tersedia.
             </p>
 
             <div
@@ -146,7 +144,7 @@ export default function BookingForm() {
               onClick={() => fileInputRef.current.click()}
               className="border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-luxury-gold rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer"
             >
-              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setFile(e.target.files[0])} accept="image/*" />
+              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setFile(e.target.files[0])} accept="image/*,application/pdf" />
               {file ? (
                 <div className="flex flex-col items-center gap-2">
                   <FileText className="w-12 h-12 text-luxury-gold" />
@@ -156,7 +154,7 @@ export default function BookingForm() {
               ) : (
                 <>
                   <UploadCloud className="w-12 h-12 text-gray-400 mb-3" />
-                  <p className="font-medium text-gray-600 dark:text-gray-300 text-center">Drag & drop gambar ke sini</p>
+                  <p className="font-medium text-gray-600 dark:text-gray-300 text-center">Drag & drop gambar/PDF ke sini</p>
                   <p className="text-sm text-gray-400">atau klik untuk browse file</p>
                 </>
               )}
@@ -168,14 +166,14 @@ export default function BookingForm() {
               </button>
               <button
                 onClick={handleFinish}
-                disabled={!file || loading}
+                disabled={loading}
                 className={`flex-1 py-4 rounded-xl font-bold transition-all duration-300 shadow-lg ${
-                  !file || loading
+                  loading
                     ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
                     : 'bg-black dark:bg-white text-white dark:text-black hover:-translate-y-1'
                 }`}
               >
-                {loading ? 'Memproses...' : 'Selesaikan Pembayaran'}
+                {loading ? 'Memproses...' : 'Selesaikan Booking'}
               </button>
             </div>
           </div>

@@ -117,13 +117,16 @@ class FieldController extends BaseController {
     }
   };
 
+  // NOTE: user_id sekarang diambil dari req.user (lebih aman)
   addReview = async (req, res) => {
     try {
-      const { user_id, rating, comment } = req.body;
+      const user_id = req.user?.id;
+      const { rating, comment } = req.body;
       const field_id = req.params.id;
 
-      if (!user_id || !rating || !comment) {
-        return this.sendError(res, 400, 'Data ulasan (user_id, rating, comment) harus diisi');
+      if (!user_id) return this.sendError(res, 401, 'Unauthorized');
+      if (!rating || !comment) {
+        return this.sendError(res, 400, 'Data ulasan (rating, comment) harus diisi');
       }
 
       await query(
