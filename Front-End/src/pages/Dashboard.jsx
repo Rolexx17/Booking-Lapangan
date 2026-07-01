@@ -11,8 +11,6 @@ export default function Dashboard() {
   const [isEditing, setIsEditing] = useState(false);
   const [notif, setNotif] = useState({ show: false, msg: '', type: 'success' });
   const [loading, setLoading] = useState(false);
-  
-  // State untuk modal receipt
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
 
@@ -37,11 +35,64 @@ export default function Dashboard() {
     fetchBookings();
 
     const socket = getSocket();
-    const onBookingChanged = () => fetchBookings();
 
-    // Mendengarkan event real-time dari server untuk pembaruan data otomatis
+    // RTC sync TANPA full refresh effect: update state lokal saja
+    const onBookingChanged = (payload) => {
+      if (!payload) return;
+
+      setHistoryData((prev) => {
+        // Hapus item realtime
+        if (payload.action === 'deleted' && payload.booking_id) {
+          return prev.filter((b) => Number(b.id) !== Number(payload.booking_id));
+        }
+
+        // Update status realtime
+        if (payload.action === 'status_updated' && payload.booking_id) {
+          return prev.map((b) =>
+            Number(b.id) === Number(payload.booking_id)
+              ? {
+                  ...b,
+                  status: payload.status || b.status,
+                  payment_status: payload.payment_status || b.payment_status
+                }
+              : b
+          );
+        }
+
+        // Update payment status realtime
+        if (payload.action === 'payment_updated' && payload.booking_id) {
+          return prev.map((b) =>
+            Number(b.id) === Number(payload.booking_id)
+              ? { ...b, payment_status: payload.payment_status || b.payment_status }
+              : b
+          );
+        }
+
+        // Jika booking dibuat oleh user ini, prepend minimal object (opsional fallback)
+        if (payload.action === 'created' && payload.booking_id) {
+          const exists = prev.some((x) => Number(x.id) === Number(payload.booking_id));
+          if (exists) return prev;
+          return [
+            {
+              id: payload.booking_id,
+              field_id: payload.field_id,
+              field_name: payload.field_name || `Lapangan ID ${payload.field_id}`,
+              booking_date: payload.booking_date,
+              time_slot: payload.time_slot || '-',
+              total_price: payload.total_price || 0,
+              status: payload.status || 'Pending',
+              payment_status: payload.payment_status || 'WaitingVerification'
+            },
+            ...prev
+          ];
+        }
+
+        return prev;
+      });
+    };
+
     socket.on('booking:changed', onBookingChanged);
-    
+
     return () => {
       socket.off('booking:changed', onBookingChanged);
     };
@@ -66,7 +117,17 @@ export default function Dashboard() {
     }
   };
 
+  // Optimistic UI cancel: langsung ubah state lokal, rollback jika gagal
   const handleCancelBooking = async (id) => {
+    const prev = [...historyData];
+    setHistoryData((curr) =>
+      curr.map((item) =>
+        Number(item.id) === Number(id)
+          ? { ...item, status: 'Cancelled', payment_status: 'Unpaid' }
+          : item
+      )
+    );
+
     const { ok, data } = await apiFetch(`/bookings/${id}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status: 'Cancelled' })
@@ -75,37 +136,35 @@ export default function Dashboard() {
     if (ok && data.success) {
       showNotif('Booking berhasil dibatalkan');
     } else {
+      setHistoryData(prev); // rollback
       showNotif(data?.message || 'Gagal membatalkan booking', 'error');
     }
   };
 
+  // Optimistic UI delete: langsung hilang dari list, rollback jika gagal
   const handleDeleteBooking = async (id) => {
+    const prev = [...historyData];
+    setHistoryData((curr) => curr.filter((item) => Number(item.id) !== Number(id)));
+
     const { ok, data } = await apiFetch(`/bookings/${id}`, { method: 'DELETE' });
     if (ok && data.success) {
       showNotif('Riwayat berhasil dihapus');
     } else {
+      setHistoryData(prev); // rollback
       showNotif(data?.message || 'Gagal menghapus riwayat', 'error');
     }
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      {/* Toast Notification */}
-      <Notification 
-        message={notif.msg} 
-        type={notif.type} 
-        isVisible={notif.show} 
-        onClose={() => setNotif({ show: false, msg: '', type: 'success' })} 
+      <Notification
+        message={notif.msg}
+        type={notif.type}
+        isVisible={notif.show}
+        onClose={() => setNotif({ show: false, msg: '', type: 'success' })}
       />
+      <BookingReceiptModal open={receiptOpen} onClose={() => setReceiptOpen(false)} booking={selectedBooking} />
 
-      {/* Booking Receipt Modal */}
-      <BookingReceiptModal 
-        open={receiptOpen} 
-        onClose={() => setReceiptOpen(false)} 
-        booking={selectedBooking} 
-      />
-
-      {/* Bagian Kiri: Profil & Navigasi */}
       <div className="lg:col-span-1 space-y-6">
         <div className="bg-white dark:bg-luxury-cardDark border border-gray-200 dark:border-gray-800 rounded-3xl p-8 text-center shadow-lg relative">
           <button onClick={() => setIsEditing(!isEditing)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-luxury-gold transition">
@@ -158,7 +217,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Bagian Kanan: List Riwayat Pemesanan */}
       <div className="lg:col-span-3 space-y-6">
         <h2 className="text-3xl font-serif font-bold border-b border-gray-200 dark:border-gray-800 pb-4">Riwayat Pemesanan</h2>
 
@@ -190,23 +248,22 @@ export default function Dashboard() {
                       {item.status}
                     </span>
                   </div>
-                  
-                  <div className="flex gap-2 w-full md:w-auto justify-end">
-                    {/* Tombol Struk/Receipt */}
+                  <div className="flex gap-2">
                     <button
                       onClick={() => { setSelectedBooking(item); setReceiptOpen(true); }}
-                      className="text-xs flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 dark:hover:bg-blue-950/80 transition"
+                      className="text-xs flex items-center gap-1 bg-blue-50 text-blue-600 px-3 py-1 rounded-lg transition"
                     >
                       <ReceiptText className="w-3 h-3" /> Receipt
                     </button>
 
                     {item.status === 'Pending' && (
-                      <button onClick={() => handleCancelBooking(item.id)} className="text-xs flex items-center gap-1 text-red-500 hover:text-red-700 bg-red-50 dark:bg-red-950/40 px-3 py-1.5 rounded-lg transition font-medium">
+                      <button onClick={() => handleCancelBooking(item.id)} className="text-xs flex items-center gap-1 text-red-500 hover:text-red-700 bg-red-50 px-3 py-1 rounded-lg transition">
                         <XCircle className="w-3 h-3" /> Batalkan
                       </button>
                     )}
+
                     {(item.status === 'Success' || item.status === 'Cancelled') && (
-                      <button onClick={() => handleDeleteBooking(item.id)} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-700 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-lg transition font-medium">
+                      <button onClick={() => handleDeleteBooking(item.id)} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-700 bg-gray-100 px-3 py-1 rounded-lg transition">
                         <Trash2 className="w-3 h-3" /> Hapus Riwayat
                       </button>
                     )}
