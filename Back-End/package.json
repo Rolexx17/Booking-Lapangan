@@ -1,9 +1,12 @@
 {
   "name": "lumina-backend",
   "version": "1.0.0",
-  "description": "Backend API for E-Commerce",
+  "description": "Backend API for Booking Lapangan",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
