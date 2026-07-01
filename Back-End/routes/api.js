@@ -42,7 +42,7 @@ router.post(
       pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
       patternMessage: 'Format email tidak valid (wajib menggunakan @)'
     },
-    { field: 'password', required: true, type: 'string', minLength: 6 }
+    { field: 'password', required: true, type: 'string', minLength: 8 }
   ]),
   authController.login
 );
