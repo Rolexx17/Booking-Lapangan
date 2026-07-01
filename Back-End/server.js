@@ -1,6 +1,3 @@
-// Titik masuk (entry point) utama untuk server
-// Upgrade RTC: Socket.IO realtime multi-room + static uploads
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -13,11 +10,21 @@ import { notFoundHandler, globalErrorHandler } from './middlewares/errorHandler.
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
+
 const httpServer = http.createServer(app);
+
+// Support single atau multiple origins (pisahkan dengan koma di env)
+const allowedOrigins = (process.env.CORS_ORIGIN || '*')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const isAllOriginsAllowed = allowedOrigins.includes('*');
 
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: isAllOriginsAllowed ? true : allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });
@@ -26,51 +33,52 @@ app.set('io', io);
 
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || '*'
-  }
-)
+    origin: (origin, callback) => {
+      // izinkan request tanpa origin (curl/postman/server-to-server)
+      if (!origin) return callback(null, true);
+
+      if (isAllOriginsAllowed || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('CORS blocked by server'));
+    }
+  })
 );
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// serve upload files
 app.use('/uploads', express.static('uploads'));
 
-// inject io ke req agar controller bisa emit event
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   req.io = io;
   next();
 });
 
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.status(200).json({ success: true, message: 'OK', data: { uptime: process.uptime() } });
 });
 
 app.use('/api', apiRoutes);
 
-// socket connection + rooms
 io.on('connection', (socket) => {
-  // Room berdasarkan role pengguna
   socket.on('join-role', (role) => {
     if (['admin', 'kasir', 'customer'].includes(role)) {
       socket.join(`role:${role}`);
     }
   });
 
-  // Room personal pengguna
   socket.on('join-user', (userId) => {
     if (userId) socket.join(`user:${userId}`);
   });
 
-  // Dynamic room (field/date, dll)
   socket.on('join-room', (roomName) => {
     if (typeof roomName === 'string' && roomName.trim()) {
       socket.join(roomName.trim());
     }
   });
 
-  // Room khusus chat matchmaking (pencocokan lawan)
   socket.on('join-matchmaking-chat', (matchmakingId) => {
     const id = Number(matchmakingId);
     if (!Number.isNaN(id) && id > 0) {
@@ -79,13 +87,10 @@ io.on('connection', (socket) => {
   });
 });
 
-// 404 handler
 app.use(notFoundHandler);
-
-// Global error handler
 app.use(globalErrorHandler);
 
-const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
+const PORT = Number(process.env.PORT) || 5000;
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Server Lumina Arena berjalan di port ${PORT}`);
 });
