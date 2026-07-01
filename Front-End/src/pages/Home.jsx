@@ -3,9 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, Star, MapPin } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
-const fallbackFields = [
-  { id: 1, name: 'Grand Emerald Pitch', type: 'Vinyl Premium', price: '250000', rating: 4.9, image: 'https://images.unsplash.com/photo-1551958219-acbc608c6377?auto=format&fit=crop&q=80&w=800' }
-];
+const fallbackFields = [];
 
 export default function Home() {
   const [fields, setFields] = useState(fallbackFields);
