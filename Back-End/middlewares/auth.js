@@ -1,7 +1,5 @@
-// Middleware autentikasi JWT dan otorisasi role / ownership
-
 import jwt from 'jsonwebtoken';
-import db from '../config/db.js';
+import { query } from '../config/db.js';
 import sendResponse from '../utils/response.js';
 
 export async function requireAuth(req, res, next) {
@@ -9,22 +7,20 @@ export async function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-    if (!token) {
-      return sendResponse(res, 401, 'Unauthorized: token tidak ditemukan');
-    }
+    if (!token) return sendResponse(res, 401, 'Unauthorized: token tidak ditemukan');
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const [rows] = await db.query(
-      'SELECT id, name, email, role, created_at FROM users WHERE id = ? LIMIT 1',
+    const userRes = await query(
+      'SELECT id, name, email, role, created_at FROM users WHERE id = $1 LIMIT 1',
       [decoded.userId]
     );
 
-    if (rows.length === 0) {
+    if (userRes.rows.length === 0) {
       return sendResponse(res, 401, 'Unauthorized: user tidak ditemukan');
     }
 
-    req.user = rows[0];
+    req.user = userRes.rows[0];
     next();
   } catch (error) {
     return sendResponse(res, 401, 'Unauthorized: token tidak valid', null, null, [
@@ -33,20 +29,16 @@ export async function requireAuth(req, res, next) {
   }
 }
 
-// Otorisasi berbasis role
 export function authorizeRoles(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user) return sendResponse(res, 401, 'Unauthorized');
-
     if (!allowedRoles.includes(req.user.role)) {
       return sendResponse(res, 403, 'Forbidden: tidak memiliki hak akses');
     }
-
     next();
   };
 }
 
-// Otorisasi ownership / pemilik data
 export function authorizeSelfOrRoles(paramUserIdKey = 'id', ...allowedRoles) {
   return (req, res, next) => {
     if (!req.user) return sendResponse(res, 401, 'Unauthorized');

@@ -1,10 +1,9 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
-import db from '../config/db.js';
+import { query } from '../config/db.js';
 
 async function seedUsers() {
-  // Tambahkan log ini untuk memastikan fungsi berjalan
-  console.log('Mulai menjalankan seeder...'); 
+  console.log('Mulai menjalankan seeder...');
 
   try {
     const users = [
@@ -14,17 +13,17 @@ async function seedUsers() {
     ];
 
     for (const user of users) {
-      console.log(`Memeriksa email: ${user.email}...`); // Log tambahan untuk tracing
-      
-      const [exists] = await db.query('SELECT id FROM users WHERE email = ?', [user.email]);
-      if (exists.length > 0) {
+      console.log(`Memeriksa email: ${user.email}...`);
+
+      const exists = await query('SELECT id FROM users WHERE email = $1 LIMIT 1', [user.email]);
+      if (exists.rows.length > 0) {
         console.log(`Lewati ${user.email} (sudah ada)`);
         continue;
       }
 
       const hashed = await bcrypt.hash(user.password, 10);
-      await db.query(
-        'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+      await query(
+        'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
         [user.name, user.email, hashed, user.role]
       );
       console.log(`Berhasil seed: ${user.email}`);

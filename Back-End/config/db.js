@@ -1,21 +1,15 @@
-// Konfigurasi database dan connection pool
+// Konfigurasi database PostgreSQL (Supabase) menggunakan connection pool
 
-// File ini mengatur koneksi database MySQL menggunakan connection pool.
-// File ini memuat variabel lingkungan (environment variables) untuk kredensial database.
-
-import mysql from 'mysql2/promise';
+import { Pool } from 'pg';
 import 'dotenv/config';
 
-// Membuat connection pool untuk menangani banyak koneksi database secara bersamaan dengan efisien
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-// Mengekspor pool agar dapat digunakan pada modul atau file lain
+export async function query(text, params = []) {
+  return pool.query(text, params);
+}
+
 export default pool;
