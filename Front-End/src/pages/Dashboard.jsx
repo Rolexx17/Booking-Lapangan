@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { User, Settings, Clock, MapPin, XCircle, Trash2, Edit2, CheckCircle2 } from 'lucide-react';
+import { User, Settings, Clock, MapPin, XCircle, Trash2, Edit2, CheckCircle2, ReceiptText } from 'lucide-react';
 import Notification from '../components/Notification';
+import BookingReceiptModal from '../components/BookingReceiptModal';
 import { apiFetch, getCurrentUser, setSession } from '../lib/api';
 import { getSocket } from '../lib/realtime';
 
@@ -10,6 +11,10 @@ export default function Dashboard() {
   const [isEditing, setIsEditing] = useState(false);
   const [notif, setNotif] = useState({ show: false, msg: '', type: 'success' });
   const [loading, setLoading] = useState(false);
+  
+  // State untuk modal receipt
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   const currentUser = getCurrentUser();
   const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
@@ -69,7 +74,6 @@ export default function Dashboard() {
 
     if (ok && data.success) {
       showNotif('Booking berhasil dibatalkan');
-      // fetchBookings() tidak perlu dipanggil manual karena di-handle oleh socket 'booking:changed'
     } else {
       showNotif(data?.message || 'Gagal membatalkan booking', 'error');
     }
@@ -79,7 +83,6 @@ export default function Dashboard() {
     const { ok, data } = await apiFetch(`/bookings/${id}`, { method: 'DELETE' });
     if (ok && data.success) {
       showNotif('Riwayat berhasil dihapus');
-      // fetchBookings() tidak perlu dipanggil manual karena di-handle oleh socket 'booking:changed'
     } else {
       showNotif(data?.message || 'Gagal menghapus riwayat', 'error');
     }
@@ -87,11 +90,19 @@ export default function Dashboard() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      {/* Toast Notification */}
       <Notification 
         message={notif.msg} 
         type={notif.type} 
         isVisible={notif.show} 
         onClose={() => setNotif({ show: false, msg: '', type: 'success' })} 
+      />
+
+      {/* Booking Receipt Modal */}
+      <BookingReceiptModal 
+        open={receiptOpen} 
+        onClose={() => setReceiptOpen(false)} 
+        booking={selectedBooking} 
       />
 
       {/* Bagian Kiri: Profil & Navigasi */}
@@ -179,14 +190,23 @@ export default function Dashboard() {
                       {item.status}
                     </span>
                   </div>
-                  <div className="flex gap-2">
+                  
+                  <div className="flex gap-2 w-full md:w-auto justify-end">
+                    {/* Tombol Struk/Receipt */}
+                    <button
+                      onClick={() => { setSelectedBooking(item); setReceiptOpen(true); }}
+                      className="text-xs flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 dark:hover:bg-blue-950/80 transition"
+                    >
+                      <ReceiptText className="w-3 h-3" /> Receipt
+                    </button>
+
                     {item.status === 'Pending' && (
-                      <button onClick={() => handleCancelBooking(item.id)} className="text-xs flex items-center gap-1 text-red-500 hover:text-red-700 bg-red-50 px-3 py-1 rounded-lg transition">
+                      <button onClick={() => handleCancelBooking(item.id)} className="text-xs flex items-center gap-1 text-red-500 hover:text-red-700 bg-red-50 dark:bg-red-950/40 px-3 py-1.5 rounded-lg transition font-medium">
                         <XCircle className="w-3 h-3" /> Batalkan
                       </button>
                     )}
                     {(item.status === 'Success' || item.status === 'Cancelled') && (
-                      <button onClick={() => handleDeleteBooking(item.id)} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-700 bg-gray-100 px-3 py-1 rounded-lg transition">
+                      <button onClick={() => handleDeleteBooking(item.id)} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-700 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-lg transition font-medium">
                         <Trash2 className="w-3 h-3" /> Hapus Riwayat
                       </button>
                     )}

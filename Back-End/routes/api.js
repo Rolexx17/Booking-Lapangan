@@ -1,5 +1,3 @@
-// REPLACE FILE PENUH - hanya tambah route chat matchmaking, route lain tetap
-
 import express from 'express';
 import fieldController from '../controllers/fieldController.js';
 import authController from '../controllers/authController.js';
@@ -135,7 +133,7 @@ router.post(
   validate([
     { field: 'field_id', required: true, type: 'number', min: 1 },
     { field: 'booking_date', required: true, type: 'string' },
-    { field: 'time_slot', required: true, type: 'string', minLength: 3 },
+    { field: 'time_slot', required: true, minLength: 3 },
     { field: 'total_price', required: true, type: 'number', min: 1 }
   ]),
   bookingController.createBooking
@@ -143,6 +141,7 @@ router.post(
 
 router.get('/bookings', requireAuth, authorizeRoles('admin', 'kasir'), bookingController.getAllBookings);
 router.get('/bookings/me', requireAuth, bookingController.getMyBookings);
+router.get('/bookings/me/notifications', requireAuth, bookingController.getMyNotifications);
 router.get('/fields/:fieldId/booked-slots', bookingController.getBookedSlots);
 
 router.put(
@@ -190,7 +189,7 @@ router.post(
 router.put('/matchmakings/:id', requireAuth, socialController.updateMatchmaking);
 router.delete('/matchmakings/:id', requireAuth, socialController.deleteMatchmaking);
 
-// CHAT MATCHMAKING (BARU)
+// CHAT MATCHMAKING
 router.get('/matchmakings/:id/messages', requireAuth, socialController.getMatchmakingMessages);
 router.post(
   '/matchmakings/:id/messages',

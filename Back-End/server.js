@@ -90,7 +90,7 @@ io.on('connection', (socket) => {
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
 
-const PORT = Number(process.env.PORT) || 5000;
+const PORT = Number(process.env.PORT) || 5001;
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Server Lumina Arena berjalan di port ${PORT}`);
 });

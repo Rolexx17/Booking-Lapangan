@@ -1,42 +1,94 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Check, UploadCloud, FileText } from 'lucide-react';
+import { Check, UploadCloud, FileText, Copy, Clock } from 'lucide-react';
 import Notification from '../components/Notification';
 import { apiFetch, getCurrentUser } from '../lib/api';
+import { getSocket } from '../lib/realtime';
+
+const DUMMY_PAYMENT = {
+  bank_name: 'Bank Lumina (Dummy)',
+  account_number: '1234567890',
+  account_name: 'PT Lumina Arena',
+  qris_image: 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=QRIS-DUMMY-LUMINA-ARENA'
+};
+
+const baseTimeSlots = [
+  '08:00-09:00', '09:00-10:00', '10:00-11:00', '11:00-12:00', 
+  '12:00-13:00', '13:00-14:00', '14:00-15:00', '15:00-16:00', 
+  '16:00-17:00', '17:00-18:00', '18:00-19:00', '19:00-20:00', 
+  '20:00-21:00', '21:00-22:00'
+];
 
 export default function BookingForm() {
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
   const [notif, setNotif] = useState({ show: false, msg: '', type: 'success' });
   const [loading, setLoading] = useState(false);
+  const [bookedSlots, setBookedSlots] = useState([]);
+  const [selectedSlots, setSelectedSlots] = useState([]);
   const fileInputRef = useRef(null);
 
   const location = useLocation();
   const navigate = useNavigate();
-  const { field, selectedSlot, selectedDate } = location.state || {};
+  const { field, selectedDate } = location.state || {};
 
   const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (!field?.id || !selectedDate) return;
+
+    const fetchBookedSlots = async () => {
+      const { ok, data } = await apiFetch(`/fields/${field.id}/booked-slots?date=${selectedDate}`);
+      if (ok && data.success) setBookedSlots(Array.isArray(data.data) ? data.data : []);
+      else setBookedSlots([]);
+    };
+
+    fetchBookedSlots();
+
+    const socket = getSocket();
+    const roomName = `field:${field.id}:date:${selectedDate}`;
+    socket.emit('join-room', roomName);
+
+    const onSlotChanged = () => fetchBookedSlots();
+    socket.on('slot:changed', onSlotChanged);
+    socket.on('booking:changed', onSlotChanged);
+
+    return () => {
+      socket.off('slot:changed', onSlotChanged);
+      socket.off('booking:changed', onSlotChanged);
+    };
+  }, [field?.id, selectedDate]);
+
+  const discountPercent = useMemo(() => {
+    const slots = selectedSlots.length;
+    if (slots <= 1) return 0;
+    return Math.min((slots - 1) * 5, 20);
+  }, [selectedSlots.length]);
+
+  const subtotal = useMemo(() => Number(field?.price || 0) * selectedSlots.length, [field?.price, selectedSlots.length]);
+  const total = useMemo(() => subtotal * (1 - discountPercent / 100), [subtotal, discountPercent]);
+
+  const toggleSlot = (slot) => {
+    if (bookedSlots.includes(slot)) return;
+    setSelectedSlots((prev) =>
+      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]
+    );
   };
+
+  const handleDragOver = (e) => e.preventDefault();
 
   const handleDrop = (e) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
-      const okType =
-        droppedFile.type.startsWith('image/') || droppedFile.type === 'application/pdf';
-      if (okType) {
-        setFile(droppedFile);
-      } else {
-        showNotif('File harus berupa gambar atau PDF', 'error');
-      }
+      const okType = droppedFile.type.startsWith('image/') || droppedFile.type === 'application/pdf';
+      if (okType) setFile(droppedFile);
+      else showNotif('File harus berupa gambar atau PDF', 'error');
     }
   };
 
   const handleFinish = async () => {
-    if (!field || !selectedSlot || !selectedDate) return;
+    if (!field || !selectedDate || selectedSlots.length === 0) return;
 
     const user = getCurrentUser();
     if (!user) {
@@ -52,8 +104,8 @@ export default function BookingForm() {
         body: JSON.stringify({
           field_id: field.id,
           booking_date: selectedDate,
-          time_slot: selectedSlot,
-          total_price: Number(field.price),
+          time_slot: selectedSlots,
+          total_price: Number(total),
           payment_proof: null
         })
       });
@@ -63,13 +115,13 @@ export default function BookingForm() {
         return;
       }
 
-      const bookingId = create.data.data.id;
+      const bookingIds = create.data?.data?.booking_ids || [];
 
-      if (file) {
+      if (file && bookingIds.length > 0) {
         const formData = new FormData();
         formData.append('payment_proof', file);
 
-        const up = await apiFetch(`/bookings/${bookingId}/payment-proof`, {
+        const up = await apiFetch(`/bookings/${bookingIds[0]}/payment-proof`, {
           method: 'POST',
           body: formData
         });
@@ -80,7 +132,7 @@ export default function BookingForm() {
         }
       }
 
-      showNotif(file ? 'Booking & upload bukti berhasil.' : 'Booking berhasil dibuat (status: Unpaid).');
+      showNotif('Booking berhasil dibuat.');
       setTimeout(() => navigate('/dashboard'), 1000);
     } catch {
       showNotif('Terjadi kesalahan menghubungi server', 'error');
@@ -89,7 +141,14 @@ export default function BookingForm() {
     }
   };
 
-  if (!field) return <div className="text-center py-20">Data pemesanan tidak valid. Silakan kembali.</div>;
+  const copyRek = async () => {
+    await navigator.clipboard.writeText(`${DUMMY_PAYMENT.bank_name} - ${DUMMY_PAYMENT.account_number} - ${DUMMY_PAYMENT.account_name}`);
+    showNotif('Nomor rekening dummy disalin');
+  };
+
+  if (!field || !selectedDate) {
+    return <div className="text-center py-20">Data pemesanan tidak valid. Silakan kembali.</div>;
+  }
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -116,16 +175,60 @@ export default function BookingForm() {
       <div className="bg-white dark:bg-luxury-cardDark rounded-3xl p-6 sm:p-8 border border-gray-200 dark:border-gray-800 shadow-xl">
         {step === 1 && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-serif font-bold">Ringkasan Pesanan</h2>
+            <h2 className="text-2xl font-serif font-bold">Pilih Jadwal</h2>
+
             <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800">
               <div className="flex justify-between mb-4"><span className="text-gray-500">Lapangan</span> <span className="font-bold">{field.name}</span></div>
               <div className="flex justify-between mb-4"><span className="text-gray-500">Tanggal</span> <span className="font-bold">{selectedDate}</span></div>
-              <div className="flex justify-between mb-4"><span className="text-gray-500">Jadwal</span> <span className="font-bold">{selectedSlot}</span></div>
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-4 flex justify-between text-lg">
-                <span className="text-gray-500">Total Pembayaran</span> <span className="font-bold text-luxury-gold">Rp {Number(field.price).toLocaleString()}</span>
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4 flex justify-between text-base">
+                <span className="text-gray-500">Harga / Slot</span> <span className="font-bold text-luxury-gold">Rp {Number(field.price).toLocaleString()}</span>
               </div>
             </div>
-            <button onClick={() => setStep(2)} className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold hover:-translate-y-1 hover:shadow-xl transition-all">
+
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">Slot Waktu Tersedia</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {baseTimeSlots.map((slot) => {
+                  const isBooked = bookedSlots.includes(slot);
+                  const isSelected = selectedSlots.includes(slot);
+                  return (
+                    <button
+                      key={slot}
+                      disabled={isBooked}
+                      onClick={() => toggleSlot(slot)}
+                      className={`py-3 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold transition border ${
+                        isBooked
+                          ? 'bg-red-50 dark:bg-red-950/20 text-red-400 border-red-200 dark:border-red-900/40 cursor-not-allowed opacity-60'
+                          : isSelected
+                            ? 'bg-luxury-gold text-white border-luxury-gold shadow-md'
+                            : 'bg-emerald-50 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30 hover:border-luxury-gold'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      {slot}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 space-y-1 text-sm">
+              <p>Jumlah Slot: <span className="font-bold">{selectedSlots.length}</span></p>
+              <p>Diskon: <span className="font-bold">{discountPercent}%</span></p>
+              <p>Subtotal: <span className="font-bold">Rp {Number(subtotal).toLocaleString()}</span></p>
+              <p>Total Bayar: <span className="font-bold text-luxury-gold">Rp {Number(total).toLocaleString()}</span></p>
+            </div>
+
+            <button
+              onClick={() => {
+                if (selectedSlots.length === 0) {
+                  showNotif('Pilih minimal 1 slot terlebih dahulu', 'error');
+                  return;
+                }
+                setStep(2);
+              }}
+              className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold hover:-translate-y-1 hover:shadow-xl transition-all"
+            >
               Lanjut ke Pembayaran
             </button>
           </div>
@@ -133,10 +236,21 @@ export default function BookingForm() {
 
         {step === 2 && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-serif font-bold">Upload Bukti Transfer (Opsional)</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Kamu bisa upload sekarang atau nanti dari dashboard/admin akan verifikasi saat bukti tersedia.
-            </p>
+            <h2 className="text-2xl font-serif font-bold">Pembayaran</h2>
+
+            <div className="border rounded-2xl p-4 bg-gray-50 dark:bg-gray-900">
+              <p className="text-sm font-bold mb-2">Transfer Dummy</p>
+              <p className="text-sm">{DUMMY_PAYMENT.bank_name}</p>
+              <p className="text-sm">{DUMMY_PAYMENT.account_number} a/n {DUMMY_PAYMENT.account_name}</p>
+              <button onClick={copyRek} type="button" className="mt-2 text-xs px-3 py-1 rounded-lg bg-black text-white flex items-center gap-1">
+                <Copy className="w-3 h-3" /> Copy
+              </button>
+
+              <div className="mt-4">
+                <p className="text-sm font-bold mb-2">Atau QRIS Dummy</p>
+                <img src={DUMMY_PAYMENT.qris_image} alt="QRIS Dummy" className="w-40 h-40 rounded-lg border" />
+              </div>
+            </div>
 
             <div
               onDragOver={handleDragOver}
