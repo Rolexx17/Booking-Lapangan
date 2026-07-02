@@ -12,12 +12,27 @@ const baseTimeSlots = [
   '20:00-21:00', '21:00-22:00'
 ];
 
+function parseStartHour(slot) {
+  const [start] = String(slot).split('-');
+  const [h] = start.split(':');
+  return Number(h);
+}
+
+function isSameLocalDate(dateA, dateB) {
+  return (
+    dateA.getFullYear() === dateB.getFullYear() &&
+    dateA.getMonth() === dateB.getMonth() &&
+    dateA.getDate() === dateB.getDate()
+  );
+}
+
 export default function FieldDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const todayISO = useMemo(() => new Date().toISOString().split('T')[0], []);
   const [selectedDate, setSelectedDate] = useState(todayISO);
+  const [now, setNow] = useState(new Date());
 
   const [field, setField] = useState(null);
   const [bookedSlots, setBookedSlots] = useState([]);
@@ -27,6 +42,12 @@ export default function FieldDetail() {
   const [loading, setLoading] = useState(false);
 
   const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
+
+  // update clock lokal tiap 30 detik agar slot expired realtime
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   const fetchFieldDetail = async () => {
     setLoading(true);
@@ -58,9 +79,7 @@ export default function FieldDetail() {
     const roomName = `field:${id}:date:${selectedDate}`;
     socket.emit('join-room', roomName);
 
-    const onSlotChanged = () => {
-      fetchBookedSlots();
-    };
+    const onSlotChanged = () => fetchBookedSlots();
 
     socket.on('slot:changed', onSlotChanged);
     socket.on('booking:changed', onSlotChanged);
@@ -70,6 +89,24 @@ export default function FieldDetail() {
       socket.off('booking:changed', onSlotChanged);
     };
   }, [id, selectedDate]);
+
+  // lock slot berdasar jam device untuk tanggal hari ini
+  // rule: disable jika startHour < currentHour
+  // contoh 20:30 slot 20:00 masih bisa, jam 21:00 baru disable
+  const expiredSlots = useMemo(() => {
+    const set = new Set();
+    const selected = new Date(`${selectedDate}T00:00:00`);
+
+    if (isSameLocalDate(now, selected)) {
+      const currentHour = now.getHours();
+      for (const slot of baseTimeSlots) {
+        const startHour = parseStartHour(slot);
+        if (startHour < currentHour) set.add(slot);
+      }
+    }
+
+    return set;
+  }, [selectedDate, now]);
 
   const handlePostReview = async (e) => {
     e.preventDefault();
@@ -196,11 +233,13 @@ export default function FieldDetail() {
               <div className="grid grid-cols-2 gap-2">
                 {baseTimeSlots.map((slot, index) => {
                   const isBooked = bookedSlots.includes(slot);
+                  const isExpired = expiredSlots.has(slot);
+
                   return (
                     <div
                       key={index}
                       className={`py-3 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold transition border ${
-                        isBooked
+                        isBooked || isExpired
                           ? 'bg-red-50 dark:bg-red-950/20 text-red-400 border-red-200 dark:border-red-900/40 opacity-70'
                           : 'bg-emerald-50 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30'
                       }`}
@@ -211,6 +250,9 @@ export default function FieldDetail() {
                   );
                 })}
               </div>
+              <p className="text-[11px] text-gray-500 mt-2">
+                Slot pada hari ini otomatis terkunci jika jam mulai slot sudah lewat dari jam device saat ini.
+              </p>
             </div>
 
             <div className="border-t border-gray-100 dark:border-gray-800 pt-5 space-y-4">

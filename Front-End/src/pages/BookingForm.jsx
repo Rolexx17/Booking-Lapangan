@@ -19,6 +19,20 @@ const baseTimeSlots = [
   '20:00-21:00', '21:00-22:00'
 ];
 
+function parseStartHour(slot) {
+  const [start] = String(slot).split('-');
+  const [h] = start.split(':');
+  return Number(h);
+}
+
+function isSameLocalDate(dateA, dateB) {
+  return (
+    dateA.getFullYear() === dateB.getFullYear() &&
+    dateA.getMonth() === dateB.getMonth() &&
+    dateA.getDate() === dateB.getDate()
+  );
+}
+
 export default function BookingForm() {
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
@@ -26,6 +40,7 @@ export default function BookingForm() {
   const [loading, setLoading] = useState(false);
   const [bookedSlots, setBookedSlots] = useState([]);
   const [selectedSlots, setSelectedSlots] = useState([]);
+  const [now, setNow] = useState(new Date());
   const fileInputRef = useRef(null);
 
   const location = useLocation();
@@ -33,6 +48,12 @@ export default function BookingForm() {
   const { field, selectedDate } = location.state || {};
 
   const showNotif = (msg, type = 'success') => setNotif({ show: true, msg, type });
+
+  // tick tiap 30 detik supaya lock slot by current time selalu update realtime
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!field?.id || !selectedDate) return;
@@ -59,6 +80,28 @@ export default function BookingForm() {
     };
   }, [field?.id, selectedDate]);
 
+  // RULE BARU:
+  // - jika hari ini, slot dengan jam mulai < jam saat ini => disable
+  // - contoh 20:30 masih boleh book 20:00-21:00 (karena startHour=20, nowHour=20)
+  // - saat sudah 21:00, slot 20:00-21:00 baru disable
+  const expiredSlots = useMemo(() => {
+    if (!selectedDate) return new Set();
+
+    const today = now;
+    const selected = new Date(`${selectedDate}T00:00:00`);
+    const set = new Set();
+
+    if (isSameLocalDate(today, selected)) {
+      const currentHour = today.getHours();
+      for (const slot of baseTimeSlots) {
+        const startHour = parseStartHour(slot);
+        if (startHour < currentHour) set.add(slot);
+      }
+    }
+
+    return set;
+  }, [selectedDate, now]);
+
   const discountPercent = useMemo(() => {
     const slots = selectedSlots.length;
     if (slots <= 1) return 0;
@@ -69,7 +112,10 @@ export default function BookingForm() {
   const total = useMemo(() => subtotal * (1 - discountPercent / 100), [subtotal, discountPercent]);
 
   const toggleSlot = (slot) => {
-    if (bookedSlots.includes(slot)) return;
+    const isBooked = bookedSlots.includes(slot);
+    const isExpired = expiredSlots.has(slot);
+    if (isBooked || isExpired) return;
+
     setSelectedSlots((prev) =>
       prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]
     );
@@ -190,14 +236,16 @@ export default function BookingForm() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {baseTimeSlots.map((slot) => {
                   const isBooked = bookedSlots.includes(slot);
+                  const isExpired = expiredSlots.has(slot);
                   const isSelected = selectedSlots.includes(slot);
+
                   return (
                     <button
                       key={slot}
-                      disabled={isBooked}
+                      disabled={isBooked || isExpired}
                       onClick={() => toggleSlot(slot)}
                       className={`py-3 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold transition border ${
-                        isBooked
+                        isBooked || isExpired
                           ? 'bg-red-50 dark:bg-red-950/20 text-red-400 border-red-200 dark:border-red-900/40 cursor-not-allowed opacity-60'
                           : isSelected
                             ? 'bg-luxury-gold text-white border-luxury-gold shadow-md'
@@ -210,6 +258,9 @@ export default function BookingForm() {
                   );
                 })}
               </div>
+              <p className="text-[11px] text-gray-500 mt-2">
+                Slot pada hari ini otomatis terkunci jika jam mulai slot sudah lewat dari jam device saat ini.
+              </p>
             </div>
 
             <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 space-y-1 text-sm">
