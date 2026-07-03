@@ -51,81 +51,123 @@ Website Demo : https://booking-lapangan-nu.vercel.app
 CREATE DATABASE lumina_arena;
 USE lumina_arena;
 
--- 1. Tabel Users
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100),
-    email VARCHAR(100) UNIQUE,
-    password VARCHAR(255),
-    role VARCHAR(20) DEFAULT 'user',
+-- 1. Create Custom ENUM Types for Booking Statuses
+DO $$ BEGIN
+    CREATE TYPE booking_status_enum AS ENUM ('Pending', 'Success', 'Cancelled');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE payment_status_enum AS ENUM ('Unpaid', 'WaitingVerification', 'Verified', 'Rejected');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- 2. Create Tables
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) DEFAULT NULL,
+    email VARCHAR(100) UNIQUE DEFAULT NULL,
+    password VARCHAR(255) DEFAULT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'customer',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Tabel Fields
-CREATE TABLE fields (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100),
-    type VARCHAR(50),
-    price DECIMAL(10, 2),
-    rating FLOAT DEFAULT 0,
-    image VARCHAR(255),
-    description TEXT
+CREATE TABLE IF NOT EXISTS fields (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) DEFAULT NULL,
+    type VARCHAR(50) DEFAULT NULL,
+    price DECIMAL(10,2) DEFAULT NULL,
+    rating REAL DEFAULT 0,
+    image VARCHAR(255) DEFAULT NULL,
+    description TEXT DEFAULT NULL
 );
 
--- 3. Tabel Bookings
-CREATE TABLE bookings (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    field_id INT,
-    booking_date DATE,
-    time_slot VARCHAR(20),
-    total_price DECIMAL(10, 2),
-    payment_proof VARCHAR(255),
-    status ENUM('Pending', 'Success', 'Cancelled') DEFAULT 'Pending',
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (field_id) REFERENCES fields(id)
+CREATE TABLE IF NOT EXISTS bookings (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    field_id INT REFERENCES fields(id),
+    booking_date DATE DEFAULT NULL,
+    time_slot VARCHAR(20) DEFAULT NULL,
+    total_price DECIMAL(10,2) DEFAULT NULL,
+    payment_proof VARCHAR(255) DEFAULT NULL,
+    status booking_status_enum DEFAULT 'Pending',
+    payment_status payment_status_enum NOT NULL DEFAULT 'Unpaid'
 );
 
--- 4. Tabel Matchmakings
-CREATE TABLE matchmakings (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    field_id INT,
-    skill_level VARCHAR(50),
-    looking_for INT,
-    time_schedule VARCHAR(100),
-    note TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (field_id) REFERENCES fields(id)
+CREATE TABLE IF NOT EXISTS matchmakings (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    field_id INT REFERENCES fields(id),
+    skill_level VARCHAR(50) DEFAULT NULL,
+    looking_for INT DEFAULT NULL,
+    time_schedule VARCHAR(100) DEFAULT NULL,
+    note TEXT DEFAULT NULL
 );
 
--- 5. Tabel Reviews
-CREATE TABLE reviews (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    field_id INT,
-    rating INT,
-    comment TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (field_id) REFERENCES fields(id)
+CREATE TABLE IF NOT EXISTS matchmaking_messages (
+    id SERIAL PRIMARY KEY,
+    matchmaking_id INT NOT NULL REFERENCES matchmakings(id) ON DELETE CASCADE,
+    sender_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert Data Dummy
-INSERT INTO fields (name, type, price, rating, image, description) VALUES 
-('Grand Emerald Pitch', 'Vinyl Premium', 250000, 4.9, 'https://images.unsplash.com/photo-1551958219-acbc608c6377?auto=format&fit=crop&q=80&w=800', 'Lapangan vinyl premium dengan standar internasional.'),
-('Royal Synthetic Arena', 'Rumput Sintetis', 300000, 4.8, 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&q=80&w=800', 'Rumput sintetis kualitas FIFA PRO.');
+CREATE TABLE IF NOT EXISTS reviews (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    field_id INT REFERENCES fields(id),
+    rating INT DEFAULT NULL,
+    comment TEXT DEFAULT NULL
+);
 
--- Trigger Update Rating Otomatis
-DELIMITER //
-CREATE TRIGGER after_review_delete
+-- 3. Create Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+CREATE INDEX IF NOT EXISTS idx_bookings_booking_date ON bookings(booking_date);
+CREATE INDEX IF NOT EXISTS idx_matchmakings_field_skill ON matchmakings(field_id, skill_level);
+CREATE INDEX IF NOT EXISTS idx_matchmaking_id ON matchmaking_messages(matchmaking_id);
+CREATE INDEX IF NOT EXISTS idx_sender_id ON matchmaking_messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_field_id ON reviews(field_id);
+
+-- 4. Create Trigger Function for Post-Delete Review Calculations
+CREATE OR REPLACE FUNCTION update_field_rating_after_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE fields 
+    SET rating = COALESCE((SELECT AVG(rating) FROM reviews WHERE field_id = OLD.field_id), 0)
+    WHERE id = OLD.field_id;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 5. Attach Trigger to Table
+CREATE OR REPLACE TRIGGER after_review_delete
 AFTER DELETE ON reviews
 FOR EACH ROW
-BEGIN
-    DECLARE new_avg DECIMAL(10,1);
-    SELECT IFNULL(AVG(rating), 0) INTO new_avg FROM reviews WHERE field_id = OLD.field_id;
-    UPDATE fields SET rating = new_avg WHERE id = OLD.field_id;
-END //
-DELIMITER ;
+EXECUTE FUNCTION update_field_rating_after_delete();
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(50) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  message TEXT NOT NULL,
+  booking_id INT NULL REFERENCES bookings(id) ON DELETE SET NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at DESC);
+
+ALTER TABLE fields
+ALTER COLUMN image TYPE TEXT;
+
+ALTER TABLE bookings
+ALTER COLUMN payment_proof TYPE TEXT;
+
+ALTER TABLE bookings
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 ```
 
 ### 2. Setup Backend
