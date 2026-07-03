@@ -163,14 +163,8 @@ DELIMITER ;
    npm install
    ```
 3. Buat file `.env` di dalam folder `Front-End` dan sesuaikan dengan konfigurasi database Anda:
-       ```env
-    PORT=5000
-    NODE_ENV=development
-    DATABASE_URL=postgresql://postgres.cxpinmsvlpdylqdultgy:YOUR_DATABASE_PASSWORD_HERE@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres
-
-    JWT_SECRET=YOUR_SUPER_SECRET_JWT_KEY_HERE
-    JWT_EXPIRES_IN=1d
-    CORS_ORIGIN=http://localhost:5173
+   ```env
+    VITE_API_BASE_URL=http://localhost:5000/api
    ```
    
 4. Jalankan server Frontend:
