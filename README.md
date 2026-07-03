@@ -145,9 +145,7 @@ DELIMITER ;
 
     JWT_SECRET=YOUR_SUPER_SECRET_JWT_KEY_HERE
     JWT_EXPIRES_IN=1d
-
-# Frontend Origin (React Vite default port)
-CORS_ORIGIN=http://localhost:5173
+    CORS_ORIGIN=http://localhost:5173
    ```
 4. Jalankan server Backend:
    ```bash
