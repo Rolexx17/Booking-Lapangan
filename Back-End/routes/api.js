@@ -10,10 +10,16 @@ import { uploadPaymentProof } from '../middlewares/uploadPaymentProof.js';
 
 const router = express.Router();
 
-/* =========================
-   AUTH
-========================= */
-
+/*
+  Definisi semua route API:
+  - Bagian AUTH: register, login, profile, register-staff.
+  - USERS: CRUD user (dengan middleware otorisasi).
+  - FIELDS: listing, detail, create/update/delete (untuk admin/kasir).
+  - BOOKINGS: membuat booking, list (admin/kasir), riwayat user, notifikasi, upload bukti pembayaran, verifikasi pembayaran, hapus booking.
+  - MATCHMAKING: CRUD posting, chat (pesan), ambil pesan.
+  - REVIEWS: ambil ulasan per field, buat/update/hapus ulasan.
+  Middleware validate digunakan untuk validasi input berdasarkan rules yang didefinisikan per route.
+*/
 router.post(
   '/auth/register',
   validate([
@@ -66,10 +72,7 @@ router.post(
   authController.register
 );
 
-/* =========================
-   USERS
-========================= */
-
+/* USERS */
 router.get('/users', requireAuth, authorizeRoles('admin', 'kasir'), authController.getAllUsers);
 router.get('/users/:id', requireAuth, authorizeSelfOrRoles('id', 'admin', 'kasir'), authController.getUserProfile);
 router.put(
@@ -90,10 +93,7 @@ router.put(
 );
 router.delete('/users/:id', requireAuth, authorizeRoles('admin'), authController.deleteUser);
 
-/* =========================
-   FIELDS
-========================= */
-
+/* FIELDS */
 router.get('/fields', fieldController.getFields);
 router.get('/fields/:id', fieldController.getFieldById);
 
@@ -123,10 +123,7 @@ router.put(
 
 router.delete('/fields/:id', requireAuth, authorizeRoles('admin'), fieldController.deleteField);
 
-/* =========================
-   BOOKINGS
-========================= */
-
+/* BOOKINGS */
 router.post(
   '/bookings',
   requireAuth,
@@ -168,10 +165,7 @@ router.post(
 
 router.delete('/bookings/:id', requireAuth, bookingController.deleteBooking);
 
-/* =========================
-   MATCHMAKING
-========================= */
-
+/* MATCHMAKING */
 router.get('/matchmakings', socialController.getMatchmakings);
 
 router.post(
@@ -198,10 +192,7 @@ router.post(
   socialController.sendMatchmakingMessage
 );
 
-/* =========================
-   REVIEWS
-========================= */
-
+/* REVIEWS */
 router.get('/fields/:fieldId/reviews', socialController.getReviewsByField);
 router.post(
   '/fields/:fieldId/reviews',

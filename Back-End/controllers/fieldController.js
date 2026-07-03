@@ -1,11 +1,22 @@
 import { query } from '../config/db.js';
 import BaseController from '../utils/BaseController.js';
 
+/*
+  Controller untuk operasi terkait lapangan (fields):
+  - getFields: list & pencarian lapangan dengan paginasi.
+  - getFieldById: detail lapangan.
+  - createField: menambahkan lapangan baru.
+  - updateField: memperbarui data lapangan.
+  - deleteField: menghapus lapangan.
+  - getReviews / addReview / deleteReview: mengelola ulasan dan memperbarui rating rata-rata pada tabel fields.
+  Semua respon menggunakan BaseController untuk konsistensi format respon.
+*/
 class FieldController extends BaseController {
   constructor() {
     super('Field');
   }
 
+  // Ambil daftar lapangan dengan dukungan pencarian q dan paginasi.
   getFields = async (req, res) => {
     try {
       const page = Math.max(parseInt(req.query.page) || 1, 1);
@@ -48,6 +59,7 @@ class FieldController extends BaseController {
     }
   };
 
+  // Ambil detail satu lapangan berdasarkan id.
   getFieldById = async (req, res) => {
     try {
       const r = await query('SELECT * FROM fields WHERE id = $1 LIMIT 1', [req.params.id]);
@@ -58,6 +70,7 @@ class FieldController extends BaseController {
     }
   };
 
+  // Menambahkan lapangan baru setelah validasi input minimal (name, type, price).
   createField = async (req, res) => {
     try {
       const { name, type, price, image } = req.body;
@@ -74,6 +87,7 @@ class FieldController extends BaseController {
     }
   };
 
+  // Memperbarui data lapangan; mengembalikan 404 jika tidak ditemukan.
   updateField = async (req, res) => {
     try {
       const { name, type, price, image } = req.body;
@@ -91,6 +105,7 @@ class FieldController extends BaseController {
     }
   };
 
+  // Menghapus lapangan berdasarkan id.
   deleteField = async (req, res) => {
     try {
       const del = await query('DELETE FROM fields WHERE id = $1', [req.params.id]);
@@ -101,6 +116,7 @@ class FieldController extends BaseController {
     }
   };
 
+  // Mengambil ulasan untuk sebuah lapangan (join ke users agar diketahui nama reviewer).
   getReviews = async (req, res) => {
     try {
       const r = await query(
@@ -117,7 +133,11 @@ class FieldController extends BaseController {
     }
   };
 
-  // NOTE: user_id sekarang diambil dari req.user (lebih aman)
+  /*
+    Menambah ulasan:
+    - user_id diambil dari req.user (lebih aman daripada menerima dari body).
+    - Setelah insert, update kolom rating pada tabel fields dengan rata-rata baru.
+  */
   addReview = async (req, res) => {
     try {
       const user_id = req.user?.id;
@@ -145,6 +165,10 @@ class FieldController extends BaseController {
     }
   };
 
+  /*
+    Menghapus ulasan:
+    - Hapus baris review dan hitung ulang rating rata-rata pada tabel fields.
+  */
   deleteReview = async (req, res) => {
     try {
       const field_id = req.params.id;

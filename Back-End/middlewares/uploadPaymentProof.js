@@ -5,6 +5,14 @@ import path from 'path';
 const uploadDir = path.join(process.cwd(), 'uploads', 'payment-proofs');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
+/*
+  Konfigurasi multer untuk menyimpan file bukti pembayaran:
+  - destination: folder uploads/payment-proofs di root proyek.
+  - filename: beri nama unik dengan timestamp + random agar tidak bentrok.
+  - fileFilter: batasi jenis file yang diterima (jpg/png/webp/pdf).
+  - limits: batasi ukuran file max 5MB.
+  Middleware export: uploadPaymentProof, gunakan .single('payment_proof') di route.
+*/
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {

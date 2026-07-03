@@ -1,5 +1,9 @@
-// Middleware validasi input sederhana (tanpa library tambahan)
-
+// Middleware validasi input sederhana tanpa dependensi eksternal.
+// Cara kerja:
+// - Terima array rules, tiap rule minimal berisi field. Rule dapat menentukan:
+//   required, type ('string'|'number'), minLength, pattern (RegExp), enum, min, max.
+// - Apabila ada error validasi, kembalikan status 400 dengan daftar errors.
+// - Jika valid, lanjutkan ke next().
 export function validate(rules = []) {
   return (req, res, next) => {
     const errors = [];

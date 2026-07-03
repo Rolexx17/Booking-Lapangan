@@ -1,5 +1,12 @@
-// Memformat dan mengirimkan respons API secara seragam
-
+/*
+  Util untuk memformat respons API secara konsisten:
+  - success: boolean (true jika statusCode 2xx)
+  - message: string
+  - data: optional payload
+  - meta: optional metadata (paginasi, dsb)
+  - errors: optional array objek error
+  Fungsi ini dipakai di semua controller / middleware untuk keluaran yang seragam.
+*/
 export default function sendResponse(
   res,
   statusCode,

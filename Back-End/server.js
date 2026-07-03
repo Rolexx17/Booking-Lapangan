@@ -14,7 +14,11 @@ app.set('trust proxy', 1);
 
 const httpServer = http.createServer(app);
 
-// Support single atau multiple origins (pisahkan dengan koma di env)
+/*
+  Inisialisasi Socket.IO:
+  - Mengizinkan origin berbasis env CORS_ORIGIN (bisa '*' atau daftar origin dipisah koma).
+  - Socket.IO disimpan di app.set('io') agar bisa diakses di controller melalui req.io.
+*/
 const allowedOrigins = (process.env.CORS_ORIGIN || '*')
   .split(',')
   .map((s) => s.trim())
@@ -31,10 +35,10 @@ const io = new SocketIOServer(httpServer, {
 
 app.set('io', io);
 
+// Middleware CORS kustom yang mengizinkan request tanpa origin (curl/postman)
 app.use(
   cors({
     origin: (origin, callback) => {
-      // izinkan request tanpa origin (curl/postman/server-to-server)
       if (!origin) return callback(null, true);
 
       if (isAllOriginsAllowed || allowedOrigins.includes(origin)) {
@@ -49,19 +53,27 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Expose folder uploads sebagai static untuk akses file upload
 app.use('/uploads', express.static('uploads'));
 
+// Pasang instance io ke setiap request agar controller bisa emit event
 app.use((req, _res, next) => {
   req.io = io;
   next();
 });
 
+// Endpoint health check sederhana
 app.get('/health', (_req, res) => {
   res.status(200).json({ success: true, message: 'OK', data: { uptime: process.uptime() } });
 });
 
 app.use('/api', apiRoutes);
 
+/*
+  Event handler Socket.IO:
+  - Menyediakan mekanisme join ke berbagai room: role, user, roomName generik, matchmaking chat.
+  - Frontend dapat subscribe ke room-room ini untuk menerima update realtime.
+*/
 io.on('connection', (socket) => {
   socket.on('join-role', (role) => {
     if (['admin', 'kasir', 'customer'].includes(role)) {
@@ -87,6 +99,7 @@ io.on('connection', (socket) => {
   });
 });
 
+// Pasang middleware handler 404 dan error global setelah semua route
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
 

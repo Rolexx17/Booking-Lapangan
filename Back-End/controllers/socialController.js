@@ -2,11 +2,23 @@ import { query } from '../config/db.js';
 import BaseController from '../utils/BaseController.js';
 import { AppError } from '../utils/AppError.js';
 
+/*
+  Controller untuk fitur sosial/matchmaking dan review berbasis endpoint:
+  - getMatchmakings / createMatchmaking / updateMatchmaking / deleteMatchmaking:
+    CRUD postingan mabar (mabar = match-making untuk cari teman main).
+    Emit event Socket.IO saat perubahan agar UI realtime update.
+  - getMatchmakingMessages / sendMatchmakingMessage:
+    Mengelola chat pada setiap postingan mabar (pagination, emit message realtime).
+  - getReviewsByField / createReview / updateReview / deleteReview:
+    Versi API review yang mendukung pagination dan update rating pada fields.
+  - Menggunakan AppError untuk error yang akan ditangani oleh middleware error.
+*/
 class SocialController extends BaseController {
   constructor() {
     super('Social');
   }
 
+  // Ambil daftar matchmakings dengan filter field_id dan skill_level + paginasi.
   getMatchmakings = async (req, res, next) => {
     try {
       const page = Math.max(Number(req.query.page) || 1, 1);
@@ -50,6 +62,7 @@ class SocialController extends BaseController {
     }
   };
 
+  // Buat postingan matchmaking baru; user harus login.
   createMatchmaking = async (req, res, next) => {
     try {
       const user_id = req.user.id;
@@ -72,6 +85,7 @@ class SocialController extends BaseController {
     }
   };
 
+  // Update postingan matchmaking; hanya owner atau admin yang dapat mengubah.
   updateMatchmaking = async (req, res, next) => {
     try {
       const { skill_level, looking_for, time_schedule, note } = req.body;
@@ -96,6 +110,7 @@ class SocialController extends BaseController {
     }
   };
 
+  // Hapus postingan matchmaking; hanya owner atau admin.
   deleteMatchmaking = async (req, res, next) => {
     try {
       const found = await query('SELECT user_id FROM matchmakings WHERE id = $1 LIMIT 1', [req.params.id]);
@@ -115,6 +130,7 @@ class SocialController extends BaseController {
     }
   };
 
+  // Ambil pesan chat untuk sebuah postingan matchmaking, dengan pagination. Kembalikan pesan dari yang paling lama ke terbaru.
   getMatchmakingMessages = async (req, res, next) => {
     try {
       const matchmakingId = Number(req.params.id);
@@ -153,6 +169,7 @@ class SocialController extends BaseController {
     }
   };
 
+  // Kirim pesan pada chat matchmaking; menyimpan pesan ke DB lalu emit ke room matchmaking.
   sendMatchmakingMessage = async (req, res, next) => {
     try {
       const matchmakingId = Number(req.params.id);
@@ -188,6 +205,7 @@ class SocialController extends BaseController {
     }
   };
 
+  // Ambil ulasan untuk field tertentu dengan pagination (digunakan oleh fitur sosial).
   getReviewsByField = async (req, res, next) => {
     try {
       const page = Math.max(Number(req.query.page) || 1, 1);
@@ -220,6 +238,7 @@ class SocialController extends BaseController {
     }
   };
 
+  // Membuat ulasan baru untuk field (memperbarui rating rata-rata pada tabel fields setelah insert).
   createReview = async (req, res, next) => {
     try {
       const user_id = req.user.id;
@@ -252,6 +271,7 @@ class SocialController extends BaseController {
     }
   };
 
+  // Update ulasan; hanya owner atau admin yang boleh melakukan update. Perbarui rating rata-rata setelah update.
   updateReview = async (req, res, next) => {
     try {
       const { rating, comment } = req.body;
@@ -277,6 +297,7 @@ class SocialController extends BaseController {
     }
   };
 
+  // Hapus ulasan dengan proteksi owner/admin dan perbarui rating rata-rata pada fields.
   deleteReview = async (req, res, next) => {
     try {
       const reviewData = await query('SELECT user_id, field_id FROM reviews WHERE id = $1', [req.params.id]);

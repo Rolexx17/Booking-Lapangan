@@ -2,6 +2,13 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { query } from '../config/db.js';
 
+/*
+  Script seeder untuk membuat akun awal:
+  - Super Admin, Kasir, Customer Demo.
+  - Mengecek eksistensi email terlebih dahulu untuk menghindari duplikasi.
+  - Hash password sebelum insert.
+  - Dijalankan secara manual (node scripts/seedUsers.js).
+*/
 async function seedUsers() {
   console.log('Mulai menjalankan seeder...');
 

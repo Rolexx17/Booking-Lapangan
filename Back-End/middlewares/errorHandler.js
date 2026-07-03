@@ -1,7 +1,11 @@
-// Middleware global penanganan error terpusat
-
 import sendResponse from '../utils/response.js';
 
+/*
+  Middleware penanganan error global dan handler 404.
+  - notFoundHandler: mengembalikan respons 404 untuk endpoint yang tidak ditemukan.
+  - globalErrorHandler: menangani error yang dilemparkan di route/handler, mencatat stack di server
+    dan mengembalikan response berbentuk terformat (produksi menyembunyikan stack trace).
+*/
 export function notFoundHandler(req, res) {
   return sendResponse(res, 404, 'Endpoint tidak ditemukan');
 }

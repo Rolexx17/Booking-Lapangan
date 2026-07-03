@@ -4,13 +4,22 @@ import BaseController from '../utils/BaseController.js';
 const ALLOWED_STATUS = ['Pending', 'Success', 'Cancelled'];
 const SLOT_REGEX = /^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/;
 
-// Fungsi helper penentu status pembayaran berdasarkan status booking
+/*
+  Helper untuk mapping status booking -> status pembayaran yang akan disimpan / ditampilkan.
+  - Success -> Verified (tanda pembayaran diterima)
+  - Cancelled -> Unpaid
+  - Lainnya -> WaitingVerification
+*/
 const toPaymentStatusByBookingStatus = (status) => {
-  if (status === 'Success') return 'Verified'; // Tampil sebagai 'Paid' di Frontend
+  if (status === 'Success') return 'Verified';
   if (status === 'Cancelled') return 'Unpaid';
   return 'WaitingVerification';
 };
 
+/*
+  Fungsi untuk mengirim event realtime via Socket.IO ke room-role, room-user, dan room-field per tanggal.
+  Event digunakan oleh frontend untuk menerima notifikasi/perubahan booking secara real-time.
+*/
 function emitBookingRealtime(io, payload) {
   if (!io) return;
   io.to('role:admin').emit('booking:changed', payload);
@@ -29,11 +38,33 @@ function emitBookingRealtime(io, payload) {
   }
 }
 
+/*
+  Controller untuk operasi terkait booking:
+  - createBooking: membuat booking (support multiple slots), validasi harga, transaksi DB, lock record field untuk konsistensi.
+  - getAllBookings: list semua booking (filter, pagination) untuk admin/kasir.
+  - getMyBookings: riwayat booking user yang sedang login.
+  - getMyNotifications: notifikasi status booking untuk user.
+  - updateBookingStatus: update status booking (proteksi akses berdasarkan role).
+  - verifyPayment: admin/kasir mengubah payment_status menjadi Verified/Rejected.
+  - uploadPaymentProof: mengunggah file bukti pembayaran (menggunakan middleware multer).
+  - deleteBooking: menghapus booking dengan aturan role.
+  - getBookedSlots: mengambil daftar slot yang sudah terisi untuk field+date.
+*/
 class BookingController extends BaseController {
   constructor() {
     super('Booking');
   }
 
+  /*
+    Membuat booking:
+    - Dukungan slot tunggal atau array slot.
+    - Validasi format slot dan tanggal.
+    - Mengunci baris lapangan (FOR UPDATE) agar harga tidak berubah selama transaksi.
+    - Menghitung diskon berdasarkan jumlah slot (kelipatan 5% per extra slot sampai max 20%).
+    - Mengecek bentrok slot untuk tanggal dan lapangan yang sama.
+    - Membagi rata total_price ke setiap baris booking agar laporan konsisten.
+    - Commit transaksi dan emit event realtime.
+  */
   createBooking = async (req, res) => {
     const client = await db.connect();
     try {
@@ -142,6 +173,11 @@ class BookingController extends BaseController {
     }
   };
 
+  /*
+    Mengambil semua booking:
+    - Filter by status, payment_status, user_id (opsional).
+    - Paginasi dan join ke users/fields untuk informasi terkait.
+  */
   getAllBookings = async (req, res) => {
     try {
       const page = Math.max(parseInt(req.query.page) || 1, 1);
@@ -186,6 +222,7 @@ class BookingController extends BaseController {
     }
   };
 
+  // Mengambil semua booking untuk user yang sedang login dan menambahkan field payment_display untuk UI.
   getMyBookings = async (req, res) => {
     try {
       const r = await query(
@@ -210,10 +247,14 @@ class BookingController extends BaseController {
     }
   };
 
+  /*
+    Mengambil notifikasi untuk user:
+    - Mengambil booking yang telah Success atau Cancelled.
+    - Memformat menjadi objek notifikasi yang dapat ditampilkan di frontend.
+  */
   getMyNotifications = async (req, res) => {
     try {
-      // NOTE: Jika tabel bookings belum punya kolom created_at, 
-      // hapus 'b.created_at,' dari query SQL di bawah ini agar tidak error.
+      // Jika tabel bookings belum punya kolom created_at, hapus 'b.created_at,' dari query SQL di bawah ini agar tidak error.
       const r = await query(
         `SELECT b.id, b.field_id, b.booking_date, b.time_slot, b.total_price, b.status, b.payment_status, b.created_at,
                 f.name as field_name
@@ -246,6 +287,12 @@ class BookingController extends BaseController {
     }
   };
 
+  /*
+    Update status booking:
+    - Validasi status terhadap daftar yang diizinkan.
+    - Proteksi akses: customer hanya boleh membatalkan booking miliknya sendiri.
+    - Mengupdate payment_status sesuai mapping dan mengirim event + notifikasi realtime.
+  */
   updateBookingStatus = async (req, res) => {
     try {
       const { status } = req.body;
@@ -297,6 +344,12 @@ class BookingController extends BaseController {
     }
   };
 
+  /*
+    Verifikasi pembayaran oleh admin/kasir:
+    - Validasi payment_status hanya boleh Verified atau Rejected.
+    - Pastikan booking memiliki bukti pembayaran sebelum verifikasi.
+    - Update payment_status dan kirim event realtime + notifikasi.
+  */
   verifyPayment = async (req, res) => {
     try { 
       const { payment_status } = req.body;
@@ -341,6 +394,13 @@ class BookingController extends BaseController {
     }
   };
 
+  /*
+    Upload bukti pembayaran:
+    - Memeriksa kepemilikan ketika role customer.
+    - Menggunakan req.file yang disediakan middleware multer.
+    - Menyimpan path file ke kolom payment_proof dan set payment_status = WaitingVerification.
+    - Emit event realtime untuk update.
+  */
   uploadPaymentProof = async (req, res) => { 
     try {
       const bookingId = Number(req.params.id);
@@ -388,6 +448,11 @@ class BookingController extends BaseController {
     }
   };
 
+  /*
+    Menghapus booking:
+    - Customer hanya boleh menghapus booking miliknya dan tidak boleh menghapus saat status Pending (harus cancel dulu).
+    - Setelah delete, emit event realtime agar UI sinkron.
+  */
   deleteBooking = async (req, res) => { 
     try {
       const b = await query(
@@ -420,6 +485,7 @@ class BookingController extends BaseController {
     }
   };
 
+  // Mengambil daftar slot yang sudah terisi (status != Cancelled) untuk field dan tanggal tertentu.
   getBookedSlots = async (req, res) => {
     try {
       const fieldId = Number(req.params.fieldId);

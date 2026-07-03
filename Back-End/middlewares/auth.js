@@ -2,6 +2,16 @@ import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
 import sendResponse from '../utils/response.js';
 
+/*
+  Middleware otorisasi dan autentikasi:
+  - requireAuth: memeriksa header Authorization (Bearer token), memverifikasi JWT,
+    mengambil data user dari DB dan memasukkannya ke req.user. Jika gagal, mengembalikan 401.
+  - authorizeRoles(...allowedRoles): higher-order middleware yang memeriksa role user
+    dan menolak akses bila tidak termasuk allowedRoles.
+  - authorizeSelfOrRoles(paramUserIdKey, ...allowedRoles): middleware yang mengizinkan
+    akses jika pemanggil adalah owner resource (params[paramUserIdKey]) atau memiliki salah satu role yang diizinkan.
+  Semua respon error menggunakan helper sendResponse agar formatnya konsisten.
+*/
 export async function requireAuth(req, res, next) {
   try {
     const authHeader = req.headers.authorization || '';
@@ -29,6 +39,7 @@ export async function requireAuth(req, res, next) {
   }
 }
 
+// Membatasi akses berdasarkan role yang diizinkan.
 export function authorizeRoles(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user) return sendResponse(res, 401, 'Unauthorized');
@@ -39,6 +50,7 @@ export function authorizeRoles(...allowedRoles) {
   };
 }
 
+// Mengizinkan akses jika pemanggil adalah pemilik resource (req.params[paramUserIdKey]) atau memiliki role tertentu.
 export function authorizeSelfOrRoles(paramUserIdKey = 'id', ...allowedRoles) {
   return (req, res, next) => {
     if (!req.user) return sendResponse(res, 401, 'Unauthorized');

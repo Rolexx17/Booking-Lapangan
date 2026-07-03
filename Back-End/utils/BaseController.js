@@ -1,7 +1,11 @@
-// Base controller untuk logika respons yang digunakan bersama
-
 import sendResponse from './response.js';
 
+/*
+  Kelas dasar untuk controller yang menyediakan helper:
+  - sendSuccess: membungkus sendResponse untuk respon sukses.
+  - sendError: mencatat error (jika ada) lalu memanggil sendResponse untuk respon error.
+  Tujuan: konsistensi format respons di seluruh controller.
+*/
 export default class BaseController {
   constructor(resourceName) {
     this.resourceName = resourceName;

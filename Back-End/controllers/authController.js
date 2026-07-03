@@ -3,11 +3,23 @@ import jwt from 'jsonwebtoken';
 import db, { query } from '../config/db.js';
 import BaseController from '../utils/BaseController.js';
 
+/*
+  Controller untuk otentikasi dan manajemen user.
+  - register: membuat user baru (hash password, cek duplikasi email).
+  - login: memverifikasi kredensial, mendukung migrasi password plaintext ke bcrypt.
+  - me: mengembalikan profil user yang sedang login (diambil dari middleware requireAuth).
+  - getAllUsers: paginasi dan pencarian user (untuk admin/kasir).
+  - getUserProfile: detail profil user berdasarkan id.
+  - updateUserProfile: update nama dan email (cek duplikasi email).
+  - deleteUser: menghapus user.
+  Semua method menggunakan helper sendSuccess / sendError dari BaseController untuk respon API.
+*/
 class AuthController extends BaseController {
   constructor() {
     super('Auth');
   }
 
+  // Registrasi user baru dengan validasi input, normalisasi email, hash password, dan penyimpanan ke DB.
   register = async (req, res) => {
     try {
       const { name, email, password, role } = req.body;
@@ -40,6 +52,13 @@ class AuthController extends BaseController {
     }
   };
 
+  /* 
+    Login:
+    - Ambil user berdasarkan email yang dinormalisasi.
+    - Jika password di DB sudah dalam format bcrypt, gunakan bcrypt.compare.
+    - Jika password masih plaintext (migrasi lama), bandingkan langsung dan apabila cocok, hash password baru dan simpan.
+    - Kembalikan JWT yang memuat userId dan role.
+  */
   login = async (req, res) => {
     try {
       const { email, password } = req.body;
@@ -77,6 +96,7 @@ class AuthController extends BaseController {
     }
   };
 
+  // Mengembalikan informasi user yang sedang terautentikasi (req.user diset oleh middleware requireAuth).
   me = async (req, res) => {
     try {
       this.sendSuccess(res, 200, 'Profil user saat ini', req.user);
@@ -85,6 +105,13 @@ class AuthController extends BaseController {
     }
   };
 
+  /*
+    Mengambil daftar user dengan dukungan:
+    - Paginasi (page, limit)
+    - Pencarian q (name/email) menggunakan ILIKE
+    - Filter role
+    Hasil disertai metadata (totalItems, totalPages).
+  */
   getAllUsers = async (req, res) => {
     try {
       const page = Math.max(parseInt(req.query.page) || 1, 1);
@@ -132,6 +159,7 @@ class AuthController extends BaseController {
     }
   };
 
+  // Mengambil profil user berdasarkan id (public untuk admin/kasir atau pemilik tergantung route).
   getUserProfile = async (req, res) => {
     try {
       const r = await query(
@@ -145,6 +173,7 @@ class AuthController extends BaseController {
     }
   };
 
+  // Update nama dan email user; melakukan normalisasi email dan cek duplikasi sebelum update.
   updateUserProfile = async (req, res) => {
     try {
       const { name, email } = req.body;
@@ -174,6 +203,7 @@ class AuthController extends BaseController {
     }
   };
 
+  // Menghapus user berdasarkan id; mengembalikan error jika tidak ditemukan.
   deleteUser = async (req, res) => {
     try {
       const del = await query('DELETE FROM users WHERE id = $1', [req.params.id]);
