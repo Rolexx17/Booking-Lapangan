@@ -4,6 +4,8 @@ Lumina Arena adalah aplikasi *full-stack* berbasis web untuk pemesanan lapangan 
 
 Aplikasi ini dibangun menggunakan arsitektur modern **React (Frontend)** dan **Node.js + Express + MySQL (Backend)**.
 
+Website Demo : https://booking-lapangan-nu.vercel.app
+
 ## ✨ Fitur Utama
 
 ### 🌟 Fitur Pengguna (Frontend)
