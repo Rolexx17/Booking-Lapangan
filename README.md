@@ -139,11 +139,15 @@ DELIMITER ;
    ```
 3. Buat file `.env` di dalam folder `Back-End` dan sesuaikan dengan konfigurasi database Anda:
    ```env
-   PORT=5000
-   DB_HOST=localhost
-   DB_USER=root
-   DB_PASS=
-   DB_NAME=lumina_arena
+    PORT=5000
+    NODE_ENV=development
+    DATABASE_URL=postgresql://postgres.cxpinmsvlpdylqdultgy:YOUR_DATABASE_PASSWORD_HERE@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres
+
+    JWT_SECRET=YOUR_SUPER_SECRET_JWT_KEY_HERE
+    JWT_EXPIRES_IN=1d
+
+# Frontend Origin (React Vite default port)
+CORS_ORIGIN=http://localhost:5173
    ```
 4. Jalankan server Backend:
    ```bash
