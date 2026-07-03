@@ -180,38 +180,49 @@ DELIMITER ;
 Aplikasi ini memiliki REST API terstruktur :
 
 ### 🔐 Auth & Users
-- `POST /api/auth/register` - Mendaftarkan user baru
+- `POST /api/auth/register` - Mendaftarkan user baru (customer)
 - `POST /api/auth/login` - Login user
-- `GET /api/users` - Mengambil daftar semua user
-- `GET /api/users/:id` - Mengambil data profil user spesifik
-- `PUT /api/users/:id` - Memperbarui profil user
-- `DELETE /api/users/:id` - Menghapus akun user
+- `GET /api/auth/me` - Mengambil profil user yang sedang login
+- `POST /api/auth/register-staff` - Mendaftarkan staff baru (admin/kasir, khusus admin)
+
+- `GET /api/users` - Mengambil daftar semua user (admin/kasir)
+- `GET /api/users/:id` - Mengambil data profil user spesifik (owner/admin/kasir)
+- `PUT /api/users/:id` - Memperbarui profil user (owner/admin)
+- `DELETE /api/users/:id` - Menghapus akun user (khusus admin)
 
 ### 🏟️ Fields (Lapangan)
 - `GET /api/fields` - Mengambil daftar lapangan (mendukung paginasi & pencarian)
 - `GET /api/fields/:id` - Mengambil detail satu lapangan
-- `POST /api/fields` - Menambahkan data lapangan baru
-- `PUT /api/fields/:id` - Memperbarui data lapangan
-- `DELETE /api/fields/:id` - Menghapus data lapangan
+- `POST /api/fields` - Menambahkan data lapangan baru (admin/kasir)
+- `PUT /api/fields/:id` - Memperbarui data lapangan (admin/kasir)
+- `DELETE /api/fields/:id` - Menghapus data lapangan (khusus admin)
 
 ### 📅 Bookings (Pemesanan)
 - `POST /api/bookings` - Membuat pesanan/booking baru
-- `GET /api/bookings` - Mengambil semua data booking di sistem
-- `GET /api/bookings/user/:userId` - Mengambil riwayat booking milik user tertentu
+- `GET /api/bookings` - Mengambil semua data booking di sistem (admin/kasir)
+- `GET /api/bookings/me` - Mengambil riwayat booking milik user yang sedang login
+- `GET /api/bookings/me/notifications` - Mengambil notifikasi booking milik user yang sedang login
+- `GET /api/fields/:fieldId/booked-slots?date=YYYY-MM-DD` - Mengambil slot yang sudah terisi berdasarkan lapangan & tanggal
 - `PUT /api/bookings/:id/status` - Memperbarui status booking (Pending/Success/Cancelled)
+- `PUT /api/bookings/:id/payment-status` - Verifikasi status pembayaran (Verified/Rejected, admin/kasir)
+- `POST /api/bookings/:id/payment-proof` - Upload bukti pembayaran (multipart/form-data, field: `payment_proof`)
 - `DELETE /api/bookings/:id` - Menghapus riwayat booking
 
 ### 🤝 Matchmakings (Mabar)
 - `GET /api/matchmakings` - Mengambil semua postingan ajakan mabar
 - `POST /api/matchmakings` - Membuat ajakan mabar baru
-- `PUT /api/matchmakings/:id` - Memperbarui data mabar
-- `DELETE /api/matchmakings/:id` - Menghapus ajakan mabar
+- `PUT /api/matchmakings/:id` - Memperbarui data mabar (owner/admin)
+- `DELETE /api/matchmakings/:id` - Menghapus ajakan mabar (owner/admin)
+
+### 💬 Chat Matchmaking
+- `GET /api/matchmakings/:id/messages` - Mengambil daftar pesan pada matchmaking tertentu
+- `POST /api/matchmakings/:id/messages` - Mengirim pesan pada matchmaking tertentu
 
 ### ⭐ Reviews (Ulasan)
 - `GET /api/fields/:fieldId/reviews` - Mengambil semua ulasan untuk lapangan tertentu
 - `POST /api/fields/:fieldId/reviews` - Menambahkan ulasan baru ke lapangan
-- `PUT /api/reviews/:id` - Memperbarui isi ulasan
-- `DELETE /api/reviews/:id` - Menghapus ulasan
+- `PUT /api/reviews/:id` - Memperbarui isi ulasan (owner/admin)
+- `DELETE /api/reviews/:id` - Menghapus ulasan (owner/admin)
 
 ---
 
@@ -220,22 +231,34 @@ Aplikasi ini memiliki REST API terstruktur :
 ```text
 Booking-Lapangan/
 ├── Back-End/
-│   ├── config/          # Konfigurasi koneksi Database MySQL
-│   ├── controllers/     # Logika bisnis (Auth, Booking, Field, Social)
-│   ├── routes/          # Definisi rute REST API
-│   ├── utils/           # BaseController & response formatter
-│   ├── .env             # Environment variables (JANGAN DI-COMMIT)
-│   └── server.js        # Entry point backend Express
+│   ├── config/
+│   ├── controllers/
+│   ├── middlewares/
+│   ├── node_modules/
+│   ├── routes/
+│   ├── scripts/
+│   ├── uploads/
+│   ├── utils/
+│   ├── validators/
+│   ├── .env.example
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── server.js
+│   └── test-db.js
 │
 └── Front-End/
+    ├── public/
     ├── src/
-    │   ├── components/  # Komponen UI (Layout, Notifikasi)
-    │   ├── context/     # React Context (ThemeContext)
-    │   ├── pages/       # Halaman utama (Home, Dashboard, Matchmaking, dll.)
-    │   ├── App.jsx      # Konfigurasi Routing (React Router)
-    │   └── main.jsx     # Entry point React
+    ├── .env.example
+    ├── .gitignore
+    ├── README.md
+    ├── eslint.config.js
+    ├── index.html
+    ├── package-lock.json
+    ├── package.json
+    ├── postcss.config.js
     ├── tailwind.config.js
-    └── package.json
+    └── vite.config.js
 ```
 
 ---
