@@ -31,6 +31,7 @@ Website Demo : https://booking-lapangan-nu.vercel.app
 - **Tailwind CSS** (Styling & Animasi)
 - **React Router Dom** (Navigasi)
 - **Lucide React** (Ikon)
+- **dotenv** (Environment Variables)
 
 ### Backend & Database
 - **Node.js** & **Express.js** (REST API)
