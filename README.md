@@ -164,7 +164,7 @@ DELIMITER ;
    ```
 3. Buat file `.env` di dalam folder `Front-End` dan sesuaikan dengan konfigurasi database Anda:
    ```env
-    VITE_API_BASE_URL=http://localhost:5000/api
+   VITE_API_BASE_URL=http://localhost:5000/api
    ```
    
 4. Jalankan server Frontend:
